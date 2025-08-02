@@ -1,0 +1,300 @@
+/* Design tokens (documented):
+   --primary: rgb(15,5,107)
+   --text: #222222
+   --muted: #444444
+   --surface: #FAFAFA
+   --surfaceElevated: #FFFFFF
+   --border: #E0E0E0
+   --divider: #DDDDDD
+   Radii: 4,6,10  Spacing: 4,6,8,10,12,16,20,24
+   Font: Segoe UI, 12pt
+*/
+
+/* Base typography and colors */
+* {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 12pt;
+    color: #222222;
+}
+
+QMainWindow, QWidget {
+    background: #F7F7F8;
+}
+
+/* Toolbars and status bar */
+QToolBar {
+    background: #FFFFFF;
+    border-bottom: 1px solid #E6E8EB;
+    padding: 6px;
+}
+QStatusBar {
+    background: #FFFFFF;
+    border-top: 1px solid #DDDDDD;
+}
+
+/* Group boxes / frames */
+QGroupBox {
+    border: 1px solid #E3E5E8;
+    border-radius: 6px;
+    margin-top: 10px;
+    padding: 8px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+    margin-left: 4px;
+    color: #444444;
+    font-weight: 600;
+}
+
+/* Buttons */
+QPushButton {
+    background: rgb(15,5,107);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+QPushButton:disabled {
+    background: #9E9E9E;
+    color: #E0E0E0;
+}
+QPushButton:hover:!disabled {
+    background: rgb(12,4,96);
+}
+QPushButton:pressed:!disabled {
+    background: rgb(10,3,86);
+}
+QPushButton:focus {
+    outline: none;
+    border: 2px solid rgba(15,5,107,0.35);
+}
+
+/* Inputs */
+QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+    background: #FFFFFF;
+    border: 1px solid #D2D6DB;
+    border-radius: 6px;
+    padding: 6px;
+}
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+    border: 2px solid rgba(15,5,107,0.75);
+    outline: none;
+}
+
+/* Dropdown popup */
+QComboBox QAbstractItemView {
+    background: #FFFFFF;
+    border: 1px solid #E0E0E0;
+    selection-background-color: rgb(15,5,107);
+    selection-color: #FFFFFF;
+}
+
+/* Lists, trees, tables */
+QListView, QTreeView, QTableView {
+    border: 1px solid #E0E0E0;
+    border-radius: 6px;
+    background: #FFFFFF;
+    /* Keep base selection colors as fallback for native styles */
+    selection-background-color: rgba(15,5,107,0.10);
+    selection-color: #222222;
+    alternate-background-color: #FAFAFA;
+}
+
+/* Improve list/table selection contrast and focus distinction using item-level rules.
+   - Active (focused view) selection: slightly stronger background + bold text
+   - Inactive (unfocused view) selection: lighter background + normal text
+   - Hover remains unchanged; we only target selected states
+   This keeps the existing palette (rgb(15,5,107)) but increases readability. */
+QListView::item:selected:active,
+QTreeView::item:selected:active,
+QTableView::item:selected:active {
+    background: rgba(15,5,107,0.18);  /* stronger than 0.10 for focused view */
+    color: #222222;                    /* keep current dark text */
+    font-weight: 600;                  /* subtle emphasis for accessibility */
+    border: 1px solid rgba(15,5,107,0.38);
+    margin: 1px 4px;                   /* compensate 1px border to preserve overall size */
+    border-radius: 4px;
+}
+
+QListView::item:selected:!active,
+QTreeView::item:selected:!active,
+QTableView::item:selected:!active {
+    background: rgba(15,5,107,0.12);  /* slightly above base to stay visible when unfocused */
+    color: #222222;
+    font-weight: 500;                  /* a bit less emphasis than active */
+    border: 1px solid rgba(15,5,107,0.28);
+    margin: 1px 4px;
+    border-radius: 4px;
+}
+
+/* Ensure disabled items still provide a visible selection without overpowering */
+QListView::item:selected:disabled,
+QTreeView::item:selected:disabled,
+QTableView::item:selected:disabled {
+    background: rgba(15,5,107,0.10);
+    color: #4A4A4A;
+    font-weight: 500;
+    border: 1px solid rgba(15,5,107,0.18);
+    margin: 1px 4px;
+    border-radius: 4px;
+}
+QHeaderView::section {
+    background: #FFFFFF;
+    border: 0px;
+    border-bottom: 1px solid #E6E8EB;
+    padding: 6px 8px;
+    font-weight: 600;
+    color: #4A4A4A;
+}
+
+/* Scroll areas */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* Splitters */
+QSplitter::handle {
+    background: #E0E0E0;
+}
+QSplitter::handle:hover {
+    background: #BDBDBB;
+}
+
+/* Progress bar */
+QProgressBar {
+    border: 1px solid #E0E0E0;
+    border-radius: 6px;
+    text-align: center;
+    padding: 2px;
+    background: #FFFFFF;
+}
+QProgressBar::chunk {
+    background-color: rgb(15,5,107);
+    margin: 0px;
+    border-radius: 6px;
+}
+
+/* Badges */
+#Badge {
+    background: #EEEEEE;
+    color: #555555;
+    border: 1px solid #DDDDDD;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-size: 10pt;
+}
+
+/* Semantic states */
+#SuccessLabel {
+    color: #2E7D32;
+    font-weight: 600;
+}
+#WarningLabel {
+    color: #E65100;
+    font-weight: 600;
+}
+#ErrorLabel {
+    color: #B71C1C;
+    font-weight: 600;
+}
+
+/* Tabs */
+QTabWidget::pane {
+    border-top: 1px solid #DDDDDD;
+    margin-top: -1px;
+}
+QTabBar::tab {
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 8px 12px;
+    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    color: #444444;
+}
+QTabBar::tab:selected {
+    background: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    border-bottom: 1px solid #FFFFFF;
+    color: #222222;
+}
+QTabBar::tab:hover:!selected {
+    color: rgb(15,5,107);
+}
+
+/* ToolButtons/Toolbar buttons */
+QToolButton {
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+QToolButton:hover {
+    background: rgba(15,5,107,0.08);
+}
+QToolButton:checked {
+    background: rgba(15,5,107,0.12);
+    color: rgb(15,5,107);
+}
+
+/* Scrollbars (QScrollBar) - modern, concise, DRY (reuse existing palette) */
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: transparent; /* keep track minimal */
+    border: none;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: rgba(15,5,107,0.20);   /* primary tint */
+    border-radius: 6px;
+    min-width: 16px;
+    min-height: 16px;
+}
+
+QScrollBar::handle:hover {
+    background: rgba(15,5,107,0.30);
+}
+
+QScrollBar::handle:pressed {
+    background: rgba(15,5,107,0.40);
+}
+
+/* Optional thin tracks to improve contrast on light backgrounds */
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: rgba(0,0,0,0.05);
+    border-radius: 6px;
+}
+
+/* Remove the arrows/buttons to keep a clean look */
+QScrollBar::add-line, QScrollBar::sub-line {
+    width: 0px;
+    height: 0px;
+    background: transparent;
+    border: none;
+}
+
+/* Margins so handles do not touch container edges */
+QScrollBar:horizontal {
+    height: 12px;
+    margin: 0 12px;
+}
+QScrollBar:vertical {
+    width: 12px;
+    margin: 12px 0;
+}
+
+/* Disabled */
+QScrollBar:disabled {
+    background: transparent;
+}
+QScrollBar::handle:disabled {
+    background: rgba(0,0,0,0.08);
+}
+
+/* Focus ring for general widgets */
+*:focus {
+    outline: none;
+}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QListView:focus, QTreeView:focus, QTableView:focus {
+    border: 2px solid rgba(15,5,107,0.65);
+}

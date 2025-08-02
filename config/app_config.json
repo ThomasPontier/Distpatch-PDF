@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "stopovers": [
+    "TEST1",
+    "TEST2",
+    "ORY",
+    "FDF",
+    "PTP",
+    "RUN",
+    "ABJ",
+    "COO",
+    "DZA",
+    "TNR",
+    "MRU",
+    "BKO",
+    "MRS",
+    "LYS",
+    "NTE",
+    "AAA",
+    "AED"
+  ],
+  "mappings": {
+    "ORY": [],
+    "PTP": [],
+    "RUN": [],
+    "DZA": [],
+    "MRU": [],
+    "MRS": [
+      "tpo@de.fr",
+      "tpdedo@de.fr"
+    ],
+    "NTE": [],
+    "ABJ": [
+      "areibeil@corsair.fr",
+      "thomas.pontier04@gmail.com"
+    ],
+    "TNR": [],
+    "AAA": [
+      "tpo@de.fr"
+    ],
+    "BKO": [
+      "tpontier@corsair.fr"
+    ]
+  },
+  "templates": {
+    "subject": "Rapport SATISFACTION CLIENT ESCALE - {{stopover_code}}",
+    "body": "Bonsoir,\n\nVoici le Bilan de satisfaction de l'escale {{stopover_code}}.\n\nCordialement"
+  },
+  "last_sent": {}
+}

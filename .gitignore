@@ -1,0 +1,11 @@
+# build artefacts
+__pycache__/
+*.py[cod]
+
+# sample / reference documents
+*.pdf
+
+# build artifacts
+dist/
+build/
+.venv/
