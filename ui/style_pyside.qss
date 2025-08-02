@@ -78,6 +78,62 @@ QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
     border-radius: 6px;
     padding: 6px;
 }
+
+/* Compact, non-truncating QComboBox (Qt reference patterns) */
+QComboBox {
+    min-height: 26px;                  /* compact */
+    padding-left: 8px;                 /* text padding */
+    padding-right: 26px;               /* reserve exact width for drop-down button */
+}
+
+/* Ensure the editable line doesn't clip text */
+QComboBox QLineEdit {
+    border: none;
+    padding: 0 0;                      /* the outer combo handles padding */
+    margin: 0;
+}
+
+/* Keep indicator area precise and prevent text overlap */
+QComboBox::drop-down {
+    subcontrol-origin: padding;        /* attaches within padded box */
+    subcontrol-position: top right;
+    width: 22px;                       /* tight button area */
+    border: none;
+    border-left: 1px solid #E6E8EB;    /* subtle divider */
+    background: transparent;
+    margin: 0;
+}
+
+/* Clean chevron using inline SVG for crisp rendering on all DPIs */
+QComboBox::down-arrow {
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
+    image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"><polyline points="6,9 12,15 18,9" fill="none" stroke="%234A4A4A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+}
+
+QComboBox::down-arrow:on {
+    image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"><polyline points="6,15 12,9 18,15" fill="none" stroke="%234A4A4A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+}
+
+/* Hover/pressed feedback for the drop-down button only */
+QComboBox::drop-down:hover {
+    background: rgba(0,0,0,0.04);
+}
+QComboBox::drop-down:pressed {
+    background: rgba(0,0,0,0.08);
+}
+
+/* Popup sizing and spacing for compact menus */
+QComboBox QAbstractItemView {
+    border: 1px solid #E0E0E0;
+    padding: 2px 0;
+    selection-background-color: rgb(15,5,107);
+    selection-color: #FFFFFF;
+    outline: none;
+}
+
+/* Keep your existing strong focus ring */
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
     border: 2px solid rgba(15,5,107,0.75);
     outline: none;

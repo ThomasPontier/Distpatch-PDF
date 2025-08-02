@@ -2,10 +2,8 @@ from __future__ import annotations
 from typing import Optional, List
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QLineEdit,
-    QPushButton, QGroupBox, QMessageBox, QWidget, QFormLayout, QDialogButtonBox
+    QDialog, QVBoxLayout, QLabel, QGroupBox, QMessageBox, QWidget, QFormLayout, QDialogButtonBox, QComboBox
 )
-from services.accounts_service import AccountsService, SenderAccount
 from services.email_service import EmailService
 
 try:
@@ -20,179 +18,91 @@ except Exception:
 
 class AccountManagerDialog(QDialog):
     """
-    Native PySide6 dialog to manage sender accounts stored in config/accounts.json via AccountsService.
-    - List existing senders (Outlook/custom)
-    - Add custom sender (email)
-    - Connect Outlook to add the currently active Outlook identity
-    - Remove selected sender
-    - Choose selected sender (persist selected_sender_id)
-    It does NOT force SendUsingAccount; EmailService logs selected sender for debug and lets Outlook decide.
+    Simplified: choose which Outlook account to use. No custom sender management.
     """
 
     def __init__(self, email_service: EmailService, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Manage Sender Accounts")
+        self.setWindowTitle("Outlook account")
         self.setModal(True)
-        self.resize(500, 420)
+        self.resize(480, 260)
 
-        self._accounts = AccountsService()
         self._email_service = email_service
 
         self._build_ui()
-        self._load_list()
+        self._load_outlook_accounts()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
 
-        # Current selection info
-        self._current_label = QLabel("", self)
-        root.addWidget(self._current_label)
+        # Detected Outlook identity (transparency)
+        eff = self._email_service.get_effective_sender() if hasattr(self._email_service, "get_effective_sender") else {}
+        eff_name = eff.get("name") if isinstance(eff, dict) else None
+        eff_mail = eff.get("email") if isinstance(eff, dict) else None
+        self._detected_label = QLabel(f"Detected Outlook: {eff_name or 'Unknown'} <{eff_mail or 'Unknown'}>", self)
+        root.addWidget(self._detected_label)
 
-        # List of senders
-        grp_list = QGroupBox("Configured senders", self)
-        vlist = QVBoxLayout(grp_list)
-        self._list = QListWidget(grp_list)
-        self._list.itemSelectionChanged.connect(self._on_selection_changed)
-        vlist.addWidget(self._list)
+        # Outlook account selection (machine profile)
+        grp_ol = QGroupBox("Choose Outlook account", self)
+        form_ol = QFormLayout(grp_ol)
+        self._ol_combo = QComboBox(grp_ol)
+        self._ol_combo.addItem("Default (let Outlook choose)", userData=None)
+        self._ol_combo.currentIndexChanged.connect(self._on_outlook_account_changed)
+        form_ol.addRow("Account:", self._ol_combo)
+        help_lbl = QLabel("If Outlook can’t apply the chosen account, it will use its default. No emails are blocked.", grp_ol)
+        help_lbl.setWordWrap(True)
+        form_ol.addRow(help_lbl)
+        root.addWidget(grp_ol)
 
-        row_btns = QHBoxLayout()
-        self._btn_remove = QPushButton("Remove", grp_list)
-        self._btn_remove.clicked.connect(self._remove_selected)
-        self._btn_remove.setEnabled(False)
-        row_btns.addWidget(self._btn_remove)
+        # Quick refresh of detected identity
+        refresh_note = QLabel("Tip: open Outlook and switch profile/account if needed, then click Refresh.", self)
+        refresh_note.setWordWrap(True)
+        root.addWidget(refresh_note)
 
-        self._btn_choose = QPushButton("Use selected", grp_list)
-        self._btn_choose.clicked.connect(self._choose_selected)
-        self._btn_choose.setEnabled(False)
-        row_btns.addWidget(self._btn_choose)
-        vlist.addLayout(row_btns)
-
-        root.addWidget(grp_list)
-
-        # Add custom sender
-        grp_custom = QGroupBox("Add custom sender", self)
-        form = QFormLayout(grp_custom)
-        self._custom_email = QLineEdit(grp_custom)
-        form.addRow("Email:", self._custom_email)
-        btn_add_custom = QPushButton("Add", grp_custom)
-        btn_add_custom.clicked.connect(self._add_custom_sender)
-        form.addRow(QWidget(), btn_add_custom)
-        root.addWidget(grp_custom)
-
-        # Outlook section
-        grp_outlook = QGroupBox("Add current Outlook account", self)
-        vb_out = QVBoxLayout(grp_outlook)
-        self._lbl_out_info = QLabel("Attempt to read the active Outlook user via COM.", grp_outlook)
-        vb_out.addWidget(self._lbl_out_info)
-        btn_connect = QPushButton("Connect Outlook (optional)", grp_outlook)
-        btn_connect.clicked.connect(self._connect_outlook_safe)
-        vb_out.addWidget(btn_connect)
-        root.addWidget(grp_outlook)
-
-        # Close
+        # Dialog buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Close, self)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
-    def _load_list(self) -> None:
-        self._list.clear()
-        selected = self._accounts.get_selected_sender()
-        for s in self._accounts.get_senders():
-            text = f"{s.name} <{s.email}> [{s.type}]"
-            if selected and s.id == selected.id:
-                text = "✓ " + text
-            item = QListWidgetItem(text)
-            item.setData(Qt.UserRole, s.id)
-            self._list.addItem(item)
-        sel_text = selected.email if selected else "None"
-        self._current_label.setText(f"Currently selected: {sel_text}")
-
-    def _on_selection_changed(self) -> None:
-        has = bool(self._list.selectedItems())
-        self._btn_remove.setEnabled(has)
-        self._btn_choose.setEnabled(has)
-
-    def _add_custom_sender(self) -> None:
-        email = (self._custom_email.text() or "").strip()
-        if not email:
-            QMessageBox.information(self, "Info", "Enter an email to add.")
-            return
+    def _load_outlook_accounts(self) -> None:
         try:
-            acc = self._accounts.ensure_custom_sender(email)
-            # also set as selected
-            self._accounts.set_selected_sender(acc.id)
-            # propagate to EmailService
-            self._email_service.set_current_account("custom", {"type": "custom", "name": acc.name, "email": acc.email})
-            self._custom_email.clear()
-            self._load_list()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to add custom sender: {e}")
-
-    def _connect_outlook_safe(self) -> None:
-        """
-        Best-effort Outlook detection without bloquer l'UI par une erreur.
-        Si Outlook n'est pas accessible, on affiche une info non bloquante et on continue.
-        """
-        if not _WIN32_AVAILABLE:
-            QMessageBox.information(self, "Outlook", "pywin32 non disponible. Vous pouvez continuer avec un expéditeur personnalisé.")
-            return
-        try:
-            try:
-                pythoncom.CoInitialize()
-            except Exception:
-                pass
-            # Certaines installations retournent une erreur COM quand le profil n'est pas prêt.
-            # On encapsule chaque étape et on bascule en info non bloquante si ça échoue.
-            try:
-                outlook = win32com.client.Dispatch("Outlook.Application")
-            except Exception:
-                QMessageBox.information(self, "Outlook", "Outlook n'est pas disponible pour le moment. Utilisez un expéditeur personnalisé.")
-                return
-            try:
-                ns = outlook.GetNamespace("MAPI")
-                current_user = ns.CurrentUser
-            except Exception:
-                QMessageBox.information(self, "Outlook", "Impossible de lire le profil Outlook actif. Utilisez un expéditeur personnalisé.")
-                return
-
-            display_name = getattr(current_user, "Name", None) or "Outlook User"
-            email = getattr(current_user, "Address", None) or ""
-            acc = self._accounts.ensure_outlook_sender(display_name, email)
-            self._accounts.set_selected_sender(acc.id)
-            # update EmailService selection (no forcing on send)
-            self._email_service.set_current_account(acc.id, {"type": "outlook", "name": acc.name, "email": acc.email})
-            self._load_list()
-            QMessageBox.information(self, "Outlook", f"Compte Outlook ajouté: {display_name} ({email})")
+            accounts = self._email_service.list_outlook_accounts()
         except Exception:
-            # En cas d'échec inattendu, ne pas afficher une erreur bloquante
-            QMessageBox.information(self, "Outlook", "Outlook n'est pas prêt. Vous pouvez continuer avec un expéditeur personnalisé.")
-
-    def _remove_selected(self) -> None:
-        items = self._list.selectedItems()
-        if not items:
-            return
-        sender_id = items[0].data(Qt.UserRole)
-        confirm = QMessageBox.question(self, "Confirm", "Remove selected sender?")
-        if confirm != QMessageBox.Yes:
-            return
+            accounts = []
+        # Refill combo while preserving the first default entry
+        self._ol_combo.blockSignals(True)
+        while self._ol_combo.count() > 1:
+            self._ol_combo.removeItem(1)
+        for acc in accounts:
+            label = acc.get("display_name") or "Outlook Account"
+            smtp = acc.get("smtp_address")
+            if smtp:
+                label = f"{label} — {smtp}"
+            self._ol_combo.addItem(label, userData=acc.get("id"))
+        # Preselect preferred if any
         try:
-            self._accounts.remove_sender(sender_id)
-            # if removed selected one, EmailService keeps last selection; we do not clear explicitly
-            self._load_list()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to remove sender: {e}")
+            pref = self._email_service.get_preferred_outlook_account()
+            if pref is None:
+                self._ol_combo.setCurrentIndex(0)
+            else:
+                for i in range(1, self._ol_combo.count()):
+                    if str(self._ol_combo.itemData(i)) == str(pref):
+                        self._ol_combo.setCurrentIndex(i)
+                        break
+        except Exception:
+            pass
+        self._ol_combo.blockSignals(False)
 
-    def _choose_selected(self) -> None:
-        items = self._list.selectedItems()
-        if not items:
-            return
-        sender_id = items[0].data(Qt.UserRole)
+        # Refresh detected label
+        eff = self._email_service.get_effective_sender() if hasattr(self._email_service, "get_effective_sender") else {}
+        eff_name = eff.get("name") if isinstance(eff, dict) else None
+        eff_mail = eff.get("email") if isinstance(eff, dict) else None
+        self._detected_label.setText(f"Detected Outlook: {eff_name or 'Unknown'} <{eff_mail or 'Unknown'}>")
+
+    def _on_outlook_account_changed(self) -> None:
+        idx = self._ol_combo.currentIndex()
+        acc_id = self._ol_combo.itemData(idx) if idx >= 0 else None
         try:
-            self._accounts.set_selected_sender(sender_id)
-            sel = self._accounts.get_selected_sender()
-            # propagate selection to EmailService
-            if sel:
-                self._email_service.set_current_account(sel.id, {"type": sel.type, "name": sel.name, "email": sel.email})
-            self._load_list()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to choose sender: {e}")
+            self._email_service.set_preferred_outlook_account(acc_id)
+        except Exception:
+            pass

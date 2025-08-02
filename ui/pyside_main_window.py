@@ -17,7 +17,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QLabel, QPushButton,
     QHBoxLayout, QVBoxLayout, QStatusBar, QProgressBar, QTabWidget, QFrame, QSpacerItem,
-    QSizePolicy
+    QSizePolicy, QComboBox
 )
 
 from controllers.app_controller import AppController
@@ -27,7 +27,6 @@ from ui.pyside_tokens import apply_palette, load_qss
 from ui.pyside_stopover_tab import StopoverTabWidget
 from ui.pyside_mapping_tab import MappingTabWidget
 from ui.pyside_email_preview_tab import EmailPreviewTabWidget
-from ui.pyside_account_manager_dialog import AccountManagerDialog
 
 
 class MainWindowQt(QMainWindow):
@@ -87,27 +86,33 @@ class MainWindowQt(QMainWindow):
         self.select_button = QPushButton("Select PDF", self._file_bar)
         self.select_button.clicked.connect(self._select_pdf)
 
-        
-        
-
-        # Right side: account / outlook controls
+        # Right side: Outlook account selector + status as a compact group
         right_spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
-        self.account_status_label = QLabel("Account: None", self._file_bar)
-        self.account_button = QPushButton("Manage Accounts", self._file_bar)
-        self.account_button.clicked.connect(self._open_account_dialog)
+        # Compact container for status + dropdown
+        status_row = QWidget(self._file_bar)
+        status_layout = QHBoxLayout(status_row)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(6)
 
-        self.outlook_button = QPushButton("Connect Outlook", self._file_bar)
-        self.outlook_button.clicked.connect(self._toggle_outlook_connection)
+        # Outlook accounts dropdown (populated from EmailService)
+        self.outlook_accounts_combo = QComboBox(status_row)
+        self.outlook_accounts_combo.setMinimumWidth(260)
+        self.outlook_accounts_combo.setObjectName("OutlookAccountsCombo")
+        # No explicit "Default (Outlook)" entry anymore; first enumerated account will be selected by default
+        self.outlook_accounts_combo.currentIndexChanged.connect(self._on_outlook_account_changed)
+        self.outlook_accounts_combo.setToolTip("Choose the Outlook account to use")
+
+
+
+        status_layout.addWidget(self.outlook_accounts_combo)
 
         # Layout assembly
         file_bar_layout.addWidget(self.file_label, 0, Qt.AlignLeft)
         file_bar_layout.addWidget(self.select_button, 0, Qt.AlignLeft)
-        
+
         file_bar_layout.addItem(right_spacer)
-        file_bar_layout.addWidget(self.account_status_label, 0, Qt.AlignRight)
-        file_bar_layout.addWidget(self.account_button, 0, Qt.AlignRight)
-        file_bar_layout.addWidget(self.outlook_button, 0, Qt.AlignRight)
+        file_bar_layout.addWidget(status_row, 0, Qt.AlignRight)
 
         self._root_layout.addWidget(self._file_bar)
 
@@ -159,9 +164,13 @@ class MainWindowQt(QMainWindow):
         self.controller.on_analysis_complete = self._on_analysis_complete
         self.controller.on_outlook_connection_change = self._on_outlook_connection_change
 
+        # Populate Outlook accounts once controller is available
+        try:
+            self._refresh_outlook_accounts()
+        except Exception:
+            pass
+
     def _initialize_state(self):
-        self.account_status_label.setText("Account: None")
-        self.outlook_button.setText("Connect Outlook")
         # Load initial mappings
         self.mapping_tab.load_mappings()
 
@@ -248,34 +257,80 @@ class MainWindowQt(QMainWindow):
         self.stopover_tab.load_page_preview(stopover, self._update_status)
 
     def _on_outlook_connection_change(self, connected: bool, user: Optional[str]):
-        if connected:
-            self.account_status_label.setText("Account: Connected")
-            self.outlook_button.setText("Disconnect Outlook")
-        else:
-            self.account_status_label.setText("Account: None")
-            self.outlook_button.setText("Connect Outlook")
+        # Refresh detected sender and accounts list whenever Outlook state changes
+        try:
+            self._refresh_outlook_accounts()
+        except Exception:
+            pass
 
+        # No separate label to update anymore
+        pass
+
+    # Removed connect/manage buttons; using a single dropdown instead
     def _toggle_outlook_connection(self):
-        self.controller.toggle_outlook_connection()
+        # No-op: connection is managed implicitly by EmailService when needed
+        pass
 
     def _open_account_dialog(self):
-        """
-        Open the (new) native PySide6 account manager dialog.
-        """
+        # No-op: simplified UX has no separate dialog
+        pass
+
+    def _refresh_outlook_accounts(self):
+        """Populate the Outlook accounts dropdown and update status label."""
         try:
-            dlg = AccountManagerDialog(email_service=self.controller.email_service, parent=self)
-            res = dlg.exec()
-            # After dialog closes, update status label from controller
-            try:
-                account_name = self.controller.email_service.get_current_account_name()
-                if account_name:
-                    self.account_status_label.setText(f"Account: {account_name}")
+            accounts = self.controller.email_service.list_outlook_accounts()
+        except Exception:
+            accounts = []
+        try:
+            combo = self.outlook_accounts_combo
+            combo.blockSignals(True)
+            # Rebuild the list entirely (no "Default" entry)
+            while combo.count() > 0:
+                combo.removeItem(0)
+            for acc in accounts:
+                # Build compact label without duplicate email
+                display = acc.get("display_name") or ""
+                smtp = acc.get("smtp_address") or ""
+                if display and smtp:
+                    # Avoid duplication like "email — email"
+                    if display.strip().lower() == smtp.strip().lower():
+                        label = smtp
+                    else:
+                        label = f"{display} — {smtp}"
                 else:
-                    self.account_status_label.setText("Account: None")
+                    label = display or smtp or "Outlook Account"
+                combo.addItem(label, userData=acc.get("id"))
+            # Selection behavior:
+            # - If a preferred account is known and still present, select it
+            # - Else select the first enumerated account (index 0) if any
+            try:
+                pref = self.controller.email_service.get_preferred_outlook_account()
+                if pref is not None:
+                    found = False
+                    for i in range(combo.count()):
+                        if str(combo.itemData(i)) == str(pref):
+                            combo.setCurrentIndex(i)
+                            found = True
+                            break
+                    if not found and combo.count() > 0:
+                        combo.setCurrentIndex(0)
+                else:
+                    if combo.count() > 0:
+                        combo.setCurrentIndex(0)
             except Exception:
-                pass
+                if combo.count() > 0:
+                    combo.setCurrentIndex(0)
+            combo.blockSignals(False)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open account dialog: {str(e)}")
+            print(f"[MainWindowQt] Failed to refresh Outlook accounts: {e}")
+
+    def _on_outlook_account_changed(self):
+        try:
+            idx = self.outlook_accounts_combo.currentIndex()
+            acc_id = self.outlook_accounts_combo.itemData(idx) if idx >= 0 else None
+            self.controller.email_service.set_preferred_outlook_account(acc_id)
+        except Exception as e:
+            print(f"[MainWindowQt] Failed to set preferred account: {e}")
 
 
 def run_app():
