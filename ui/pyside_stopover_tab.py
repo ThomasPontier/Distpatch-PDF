@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QTimer, QSize, QEvent
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
-    QGroupBox, QLabel, QMenu, QMessageBox, QSplitter, QSizePolicy, QFrame
+    QGroupBox, QLabel, QMessageBox, QSplitter, QSizePolicy
 )
 from PIL import Image
 from core.pdf_renderer import PDFRenderer
@@ -50,9 +50,11 @@ class StopoverTabWidget(QWidget):
         left_v.setSpacing(6)
 
         self.stopover_list = QListWidget(left_group)
-        self.stopover_list.itemDoubleClicked.connect(self._on_double_click)
-        self.stopover_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.stopover_list.customContextMenuRequested.connect(self._on_right_click)
+        # Change 1: preview on single selection instead of double click
+        self.stopover_list.currentItemChanged.connect(self._on_selection_changed)
+        # Change 2: open email settings on double click (replaces right-click flow)
+        self.stopover_list.itemDoubleClicked.connect(self._open_email_settings_for_item)
+        # Remove obsolete context menu
         left_v.addWidget(self.stopover_list)
 
         # Right: Preview
@@ -107,49 +109,47 @@ class StopoverTabWidget(QWidget):
             item = QListWidgetItem(s.code)
             self.stopover_list.addItem(item)
 
-    def _on_double_click(self, item: QListWidgetItem):
-        code = item.text()
-        selected = None
-        for s in self.stopovers:
-            if s.code == code:
-                selected = s
-                break
-        if selected and self.on_stopover_select:
-            self.on_stopover_select(selected)
+    # New: single-selection triggers preview callback
+    def _on_selection_changed(self, current: Optional[QListWidgetItem], previous: Optional[QListWidgetItem]):
+        try:
+            if not current:
+                return
+            code = current.text()
+            selected = None
+            for s in self.stopovers:
+                if s.code == code:
+                    selected = s
+                    break
+            if selected:
+                # If external handler provided, keep compatibility
+                if self.on_stopover_select:
+                    self.on_stopover_select(selected)
+                else:
+                    # Fallback: render preview directly using local API if available
+                    self.load_page_preview(selected)
+        except Exception:
+            pass
 
-    def _on_right_click(self, pos):
-        item = self.stopover_list.itemAt(pos)
+    # New: double click opens email settings dialog directly
+    def _open_email_settings_for_item(self, item: QListWidgetItem):
         if not item:
-            return
-        self.stopover_list.setCurrentItem(item)
-        menu = QMenu(self)
-        action = menu.addAction("Configure Email Settings")
-        action.triggered.connect(self._configure_email_settings)
-        menu.exec(self.stopover_list.mapToGlobal(pos))
-
-    def _configure_email_settings(self):
-        if not self.controller:
-            QMessageBox.critical(self, "Error", "Controller not available")
-            return
-        item = self.stopover_list.currentItem()
-        if not item:
-            QMessageBox.information(self, "Info", "Please select a stopover first")
-            return
-        code = item.text()
-        selected = None
-        for s in self.stopovers:
-            if s.code == code:
-                selected = s
-                break
-        if not selected:
-            QMessageBox.critical(self, "Error", "Selected stopover not found")
             return
         try:
+            code = item.text()
+            selected = None
+            for s in self.stopovers:
+                if s.code == code:
+                    selected = s
+                    break
+            if not selected:
+                QMessageBox.critical(self, "Error", "Selected stopover not found")
+                return
+            if not self.controller or not hasattr(self.controller, "stopover_email_service"):
+                QMessageBox.critical(self, "Error", "Controller not available")
+                return
             from ui.pyside_stopover_email_dialog import StopoverEmailSettingsDialog
             dlg = StopoverEmailSettingsDialog(self, selected.code, self.controller.stopover_email_service)
-            if dlg.exec() == QtWidgets.QDialog.Accepted:
-                # No additional UI refresh required currently; placeholder for future updates.
-                pass
+            dlg.exec()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open email configuration dialog: {str(e)}")
 
