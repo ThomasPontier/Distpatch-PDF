@@ -10,7 +10,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import PySide6 UI entry. Avoid importing Tkinter UI here to prevent importing win32com eagerly.
 from ui.pyside_main_window import run_app as run_app_qt
-# Note: Legacy Tkinter UI (ui.main_window.MainWindow) is kept for reference but not imported to avoid optional deps at import time.
 
 
 def main():

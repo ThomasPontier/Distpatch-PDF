@@ -27,9 +27,6 @@ from ui.pyside_tokens import apply_palette, load_qss
 from ui.pyside_stopover_tab import StopoverTabWidget
 from ui.pyside_mapping_tab import MappingTabWidget
 from ui.pyside_email_preview_tab import EmailPreviewTabWidget
-from ui.stopover_email_dialog import StopoverEmailDialog  # kept for parity if needed
-from ui.email_dialog import EmailDispatchDialog
-from ui.account_dialog import AccountDialog
 from ui.pyside_account_manager_dialog import AccountManagerDialog
 
 

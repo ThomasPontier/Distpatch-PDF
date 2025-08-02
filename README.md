@@ -1,6 +1,7 @@
 # PDF Stopover Analyzer
 
 A standalone desktop application for analyzing PDF documents to find stopover pages based on specific text patterns.
+UI implemented with PySide6 (Qt for Python), styled via QSS.
 
 ## Features
 
@@ -19,7 +20,14 @@ A standalone desktop application for analyzing PDF documents to find stopover pa
 - Required packages listed in `requirements.txt`
 
 ### Install Dependencies
+Create and activate a virtual environment, then install dependencies:
 ```bash
+python -m venv .venv
+# Windows
+.venv\Scripts\activate
+# macOS/Linux
+# source .venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
@@ -34,6 +42,13 @@ python main.py
 ```bash
 python build.py
 ```
+Or build directly with PyInstaller:
+```bash
+pyinstaller distpatch_pdf.spec
+```
+Ensure assets are bundled:
+- `ui/style_pyside.qss`
+- `assets/app.ico`
 
 The executable will be created in the `dist` folder.
 
@@ -60,7 +75,7 @@ pdf_stopover_analyzer/
 ├── models/
 │   └── stopover.py        # Data model for stopover information
 ├── ui/
-│   └── main_window.py     # Main GUI window
+│   └── pyside_main_window.py  # Main GUI window
 ├── core/
 │   ├── pdf_analyzer.py    # PDF text analysis logic
 │   └── pdf_renderer.py    # PDF page rendering
@@ -73,6 +88,7 @@ pdf_stopover_analyzer/
 │   └── test_pdf_analyzer.py  # Unit tests
 ├── config/                # Default configuration files
 ├── assets/                # Application assets (icons, images)
+├── ui/style_pyside.qss    # PySide6 stylesheet
 ├── requirements.txt       # Python dependencies
 ├── distpatch_pdf.spec     # PyInstaller configuration
 ├── build.py              # Build script
@@ -84,9 +100,8 @@ pdf_stopover_analyzer/
 ### Dependencies
 - **PyMuPDF (fitz)**: PDF processing and rendering
 - **Pillow**: Image handling for page previews
-- **tkinter**: GUI framework (built-in with Python)
 - **PyInstaller**: Executable creation
-- **comtypes**: Windows COM interface for Outlook integration
+- **pywin32**: Windows Outlook automation (win32com)
 
 ### Pattern Matching
 - Stopover codes must be exactly 3 uppercase letters followed by "-Bilan"
@@ -101,6 +116,8 @@ python -m pytest tests/
 ```
 
 ## Troubleshooting
+
+Windows/Outlook integration requires pywin32 and a configured Outlook profile.
 
 ### Common Issues
 

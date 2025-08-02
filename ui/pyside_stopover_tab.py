@@ -145,11 +145,11 @@ class StopoverTabWidget(QWidget):
             QMessageBox.critical(self, "Error", "Selected stopover not found")
             return
         try:
-            # Dialog remains Tkinter-based in original; parity maintained by launching through controller if needed.
-            from ui.stopover_email_dialog import StopoverEmailDialog
-            # The Tk dialog expects a Tk parent; since we preserve behavior, call its show via controller service.
-            dlg = StopoverEmailDialog(None, selected.code, self.controller.stopover_email_service)
-            dlg.show()
+            from ui.pyside_stopover_email_dialog import StopoverEmailSettingsDialog
+            dlg = StopoverEmailSettingsDialog(self, selected.code, self.controller.stopover_email_service)
+            if dlg.exec() == QtWidgets.QDialog.Accepted:
+                # No additional UI refresh required currently; placeholder for future updates.
+                pass
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to open email configuration dialog: {str(e)}")
 
