@@ -65,7 +65,7 @@ class StopoverEmailService:
         t = self._manager.get_templates()
         maps = self._manager.get_mappings()
         last = self._manager.get_last_sent()
-        stopovers = self._manager.get_stopovers()
+        is_enabled = self._manager.is_stopover_enabled(code)
         return StopoverEmailConfig(
             stopover_code=code,
             subject_template=t.get("subject", "Stopover Report - {{stopover_code}}"),
@@ -73,7 +73,7 @@ class StopoverEmailService:
             recipients=list(maps.get(code, [])),
             cc_recipients=[],
             bcc_recipients=[],
-            is_enabled=code in stopovers,
+            is_enabled=is_enabled,
             last_sent_at=last.get(code),
         )
 
@@ -111,7 +111,7 @@ class StopoverEmailService:
             changed = True
         last = self._manager.get_last_sent()
         if code in last:
-            self._manager.clear_last_sent(code)
+            self._manager.clear_last_sent_normalized(code)
             changed = True
         return changed
 

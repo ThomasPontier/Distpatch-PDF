@@ -389,9 +389,7 @@ PDF Stopover Analyzer"""
         """Load subject and body from centralized ConfigManager (JSON-backed)."""
         try:
             manager = get_config_manager()
-            t = manager.get_templates()
-            subject = t.get("subject") or "Stopover Report - {{stopover_code}}"
-            body = t.get("body") or self._get_default_template()
+            subject, body = manager.get_effective_templates()
             print("[EmailService][DEBUG] Templates loaded")
             return subject, body
         except Exception as e:

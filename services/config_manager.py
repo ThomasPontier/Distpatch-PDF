@@ -106,6 +106,9 @@ class ConfigManager:
         return cls._instance
 
     # Defaults
+    # Centralized default subject template
+    DEFAULT_SUBJECT: ClassVar[str] = "Stopover Report - {{stopover_code}}"
+
     def _default_config(self) -> Dict[str, Any]:
         return {
             "version": 1,
@@ -512,6 +515,48 @@ class ConfigManager:
             s = str(stopover)
             if s in self._config.get("last_sent", {}):
                 self._config["last_sent"].pop(s, None)
+                self._save()
+        self._emit_last_sent()
+
+    # --------- DRY helpers (no behavior change for existing APIs) ---------
+
+    def get_effective_templates(self) -> tuple[str, str]:
+        """
+        Return (subject, body) with defaults applied:
+          - subject: templates["subject"] or DEFAULT_SUBJECT
+          - body: templates["body"] or the literal default body template currently used by EmailService._get_default_template()
+        This is a pure accessor; no changes to persisted config.
+        """
+        t = self.get_templates()
+        subject = t.get("subject") or self.DEFAULT_SUBJECT
+        # Copy the literal default body from EmailService._get_default_template() to avoid cross-dependency
+        default_body = """Dear Team,
+
+Please find attached the stopover report for {{stopover_code}}.
+
+This report contains all relevant information for this stopover location.
+
+Best regards,
+PDF Stopover Analyzer"""
+        body = t.get("body") or default_body
+        return subject, body
+
+    def is_stopover_enabled(self, code: str) -> bool:
+        """Return True if normalized code is present in stopovers list."""
+        if code is None:
+            return False
+        cu = str(code).upper()
+        return cu in self.get_stopovers()
+
+    def clear_last_sent_normalized(self, code: str) -> None:
+        """Uppercase code internally then clear last_sent for that key."""
+        if code is None:
+            return
+        cu = str(code).upper()
+        # Direct manipulation preserving semantics of clear_last_sent
+        with self._lock:
+            if cu in self._config.get("last_sent", {}):
+                self._config["last_sent"].pop(cu, None)
                 self._save()
         self._emit_last_sent()
 
