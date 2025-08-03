@@ -141,6 +141,12 @@ class MainWindowQt(QMainWindow):
         )
         self.tabs.addTab(self.email_preview_tab, "Email Preview")
 
+        # Trigger a refresh when switching to the Email Preview tab to ensure default previews render
+        try:
+            self.tabs.currentChanged.connect(self._on_tab_changed)
+        except Exception:
+            pass
+
         self._root_layout.addWidget(self.tabs, 1)
 
     def _setup_status_bar(self):
@@ -270,6 +276,16 @@ class MainWindowQt(QMainWindow):
     def _toggle_outlook_connection(self):
         # No-op: connection is managed implicitly by EmailService when needed
         pass
+
+    def _on_tab_changed(self, index: int):
+        """Ensure Email Preview is rebuilt when the tab becomes active."""
+        try:
+            widget = self.tabs.widget(index)
+            if widget is self.email_preview_tab:
+                # Rebuild items to respect current filters and ensure default shows all
+                self.email_preview_tab._rebuild_items_async()
+        except Exception:
+            pass
 
     def _open_account_dialog(self):
         # No-op: simplified UX has no separate dialog

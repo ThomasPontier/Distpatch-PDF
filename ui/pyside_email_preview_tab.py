@@ -197,6 +197,9 @@ class EmailPreviewTabWidget(QWidget):
         self._last_template = None
 
     def _build_ui(self):
+        # Guard to avoid triggering rebuilds during initial widget construction
+        self._initializing = True
+
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(6)
@@ -210,18 +213,21 @@ class EmailPreviewTabWidget(QWidget):
         header.addWidget(QLabel("Filtre escale:"))
         # Remplace le champ texte par une liste déroulante d'escales
         self.filter_combo = QComboBox()
+        # Set up defaults before wiring signals to avoid premature refresh
         self.filter_combo.addItem("Toutes les escales")
-        self.filter_combo.currentIndexChanged.connect(self._rebuild_items_async)
         header.addWidget(self.filter_combo)
 
         header.addSpacing(8)
         header.addWidget(QLabel("Afficher:"))
         self.presence_combo = QComboBox()
         self.presence_combo.addItems(["Toutes", "Avec email", "Sans email"])
-        self.presence_combo.currentIndexChanged.connect(self._rebuild_items_async)
-        header.addWidget(self.presence_combo)
-        # Défaut: s'assurer que "Toutes" est sélectionné au lancement
+        # Ensure default selection before connecting signals to avoid early filtering
         self.presence_combo.setCurrentIndex(0)
+        header.addWidget(self.presence_combo)
+
+        # Now connect signals
+        self.filter_combo.currentIndexChanged.connect(self._rebuild_items_async)
+        self.presence_combo.currentIndexChanged.connect(self._rebuild_items_async)
 
         header.addStretch(1)
 
@@ -248,7 +254,23 @@ class EmailPreviewTabWidget(QWidget):
         root.addWidget(self.scroll, 1)
 
         # Top: global template group (reusable by escales)
-        self.template_group = QGroupBox("Modèle global (réutilisé par les escales)")
+        self.template_group = QGroupBox("Modèle global")
+        # Add a distinctive blue border to clearly separate from previews
+        # Use brand primary color (rgb(15,5,107)) to stay consistent with the GUI
+        self.template_group.setStyleSheet(
+            "QGroupBox {"
+            "  border: 2px solid rgb(15,5,107);"
+            "  border-radius: 6px;"
+            "  margin-top: 10px;"
+            "  padding-top: 16px;"
+            "}"
+            "QGroupBox::title {"
+            "  subcontrol-origin: margin;"
+            "  left: 10px;"
+            "  color: rgb(15,5,107);"
+            "  font-weight: bold;"
+            "}"
+        )
         tgl = QVBoxLayout(self.template_group)
         tgl.setContentsMargins(8, 8, 8, 8)
         tgl.setSpacing(6)
@@ -353,6 +375,9 @@ class EmailPreviewTabWidget(QWidget):
                 w.deleteLater()
 
     def _rebuild_items_async(self):
+        # Skip during initial construction to prevent empty-first render
+        if getattr(self, "_initializing", False):
+            return
         QTimer.singleShot(0, self._rebuild_items)
 
     def _rebuild_items(self):
@@ -388,10 +413,17 @@ class EmailPreviewTabWidget(QWidget):
         except Exception:
             overrides = {}
 
-        # Appliquer les filtres. Si la combo "Toutes" est sélectionnée et que les mappings ne sont pas encore chargés,
-        # on veut quand même afficher toutes les escales.
+        # Appliquer les filtres
         filtered = self._apply_filters(self._stopovers)
-        if not filtered and (not hasattr(self, "presence_combo") or self.presence_combo.currentText() == "Toutes"):
+
+        # Fallbacks to guarantee non-empty default view when mode == "Toutes"
+        mode_txt = self.presence_combo.currentText() if hasattr(self, "presence_combo") else "Toutes"
+        sel_txt = self.filter_combo.currentText() if hasattr(self, "filter_combo") else "Toutes les escales"
+        if not filtered and (mode_txt == "Toutes"):
+            # If user intends to see all, show all regardless of mappings readiness
+            filtered = list(self._stopovers)
+        if not filtered and (sel_txt.strip().upper() in ("TOUTES LES ESCALES", "")):
+            # If global filter is all, also default to all
             filtered = list(self._stopovers)
 
         for s in filtered:
@@ -598,3 +630,7 @@ class EmailPreviewTabWidget(QWidget):
         else:
             self.filter_combo.setCurrentIndex(0)
         self.filter_combo.blockSignals(False)
+        # End of initialization: subsequent changes can trigger rebuilds
+        if getattr(self, "_initializing", False):
+            self._initializing = False
+            QTimer.singleShot(0, self._rebuild_items)
