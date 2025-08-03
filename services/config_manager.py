@@ -107,7 +107,7 @@ class ConfigManager:
 
     # Defaults
     # Centralized default subject template
-    DEFAULT_SUBJECT: ClassVar[str] = "Stopover Report - {{stopover_code}}"
+    DEFAULT_SUBJECT: ClassVar[str] = "Rapport d’escale - {{stopover_code}}"
 
     def _default_config(self) -> Dict[str, Any]:
         return {
@@ -530,14 +530,12 @@ class ConfigManager:
         t = self.get_templates()
         subject = t.get("subject") or self.DEFAULT_SUBJECT
         # Copy the literal default body from EmailService._get_default_template() to avoid cross-dependency
-        default_body = """Dear Team,
+        default_body = """Bonjour,
 
-Please find attached the stopover report for {{stopover_code}}.
+Veuillez trouver en pièce jointe le rapport d’escale pour {{stopover_code}}.
 
-This report contains all relevant information for this stopover location.
-
-Best regards,
-PDF Stopover Analyzer"""
+Cordialement,
+Distpatch PDF"""
         body = t.get("body") or default_body
         return subject, body
 

@@ -113,9 +113,13 @@ class StopoverEmailService:
         return to_list, cc_list, bcc_list
 
     def get_config(self, stopover_code: str) -> StopoverEmailConfig:
-        """Build StopoverEmailConfig based on unified config state (with CC/BCC decode)."""
+        """Build StopoverEmailConfig based on unified config state (with CC/BCC decode).
+
+        Note: Return effective templates so the UI reflects the same subject/body that
+        EmailService will actually use when sending (persisted value or default fallback)."""
         code = str(stopover_code).upper()
-        t = self._manager.get_templates()
+        # Raw templates snapshot (kept for future use if needed)
+        _ = self._manager.get_templates()
         maps = self._manager.get_mappings()
         last = self._manager.get_last_sent()
         is_enabled = self._manager.is_stopover_enabled(code)
@@ -123,10 +127,13 @@ class StopoverEmailService:
         encoded = list(maps.get(code, []))
         to_list, cc_list, bcc_list = self._decode_recipients(encoded)
 
+        # Use effective templates (persisted-or-default) to match sending path
+        subject_eff, body_eff = self._manager.get_effective_templates()
+
         return StopoverEmailConfig(
             stopover_code=code,
-            subject_template=t.get("subject", "Stopover Report - {{stopover_code}}"),
-            body_template=t.get("body", ""),
+            subject_template=subject_eff,
+            body_template=body_eff,
             recipients=to_list,
             cc_recipients=cc_list,
             bcc_recipients=bcc_list,

@@ -375,15 +375,14 @@ class EmailService:
         return None
 
     def _get_default_template(self) -> str:
-        """Get default email template."""
-        return """Dear Team,
-
-Please find attached the stopover report for {{stopover_code}}.
-
-This report contains all relevant information for this stopover location.
-
-Best regards,
-PDF Stopover Analyzer"""
+        """Get default email template (centralized in ConfigManager)."""
+        try:
+            manager = get_config_manager()
+            _subject, body = manager.get_effective_templates()
+            return body
+        except Exception:
+            # Last-resort fallback if manager cannot be reached
+            return "Rapport d’escale - {{stopover_code}}"
 
     def _load_templates_json(self) -> tuple[str, str]:
         """Load subject and body from centralized ConfigManager (JSON-backed)."""
