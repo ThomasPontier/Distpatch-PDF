@@ -45,6 +45,10 @@ class MappingTabWidget(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(self.table.EditTrigger.NoEditTriggers)
+        # Enable interactive sorting by clicking on headers
+        self.table.setSortingEnabled(True)
+        # Default sort by Stopover Code ascending
+        self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
 
         # Actions
         actions = QHBoxLayout()
@@ -69,6 +73,9 @@ class MappingTabWidget(QWidget):
         # Layout
         root.addLayout(actions)
         root.addWidget(self.table, 1)
+
+        # UX: double-click a row to edit its emails
+        self.table.itemDoubleClicked.connect(lambda _: self._edit_selected_mapping())
 
     # -------- Public API (parity) --------
 
@@ -100,7 +107,22 @@ class MappingTabWidget(QWidget):
                 self.table.setItem(row, 2, QTableWidgetItem(emails_str))
                 self.table.setItem(row, 3, QTableWidgetItem(status))
 
-            self.table.sortItems(0)
+            # After populating, preserve current sort or default to code asc
+            header = self.table.horizontalHeader()
+            if self.table.isSortingEnabled():
+                try:
+                    section = header.sortIndicatorSection()
+                    order = header.sortIndicatorOrder()
+                except Exception:
+                    section = 0
+                    order = Qt.SortOrder.AscendingOrder
+                self.table.blockSignals(True)
+                try:
+                    self.table.sortItems(section, order)
+                finally:
+                    self.table.blockSignals(False)
+            else:
+                self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to load mappings: {str(e)}")
 
