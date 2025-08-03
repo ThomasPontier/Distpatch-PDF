@@ -60,9 +60,40 @@ class MainWindowQt(QMainWindow):
         except Exception:
             pass
 
-        # Maximize if possible; otherwise set reasonable geometry and min size
-        self.showMaximized()
+        # Set sane minimum size first
         self.setMinimumSize(cfg.get("min_width", 1000), cfg.get("min_height", 700))
+
+        # Robust initial geometry: center a reasonable default on the primary screen.
+        # Avoid forcing maximized at startup to prevent top-left "glitchy" drag behavior on some systems.
+        try:
+            screen = QApplication.primaryScreen()
+            if screen:
+                ag = screen.availableGeometry()
+                # Use 80% of available space but not smaller than a sane default
+                w = max(1200, int(ag.width() * 0.8))
+                h = max(800, int(ag.height() * 0.8))
+                x = ag.x() + (ag.width() - w) // 2
+                y = ag.y() + (ag.height() - h) // 2
+                self.setGeometry(x, y, w, h)
+        except Exception as _e:
+            # Fallback: do nothing, Qt will choose a default geometry
+            pass
+
+        # Optional: allow explicit start maximized via environment variable
+        # Set START_MAXIMIZED=1 to force maximize at startup.
+        if os.environ.get("START_MAXIMIZED", "0").lower() in ("1", "true", "yes"):
+            try:
+                self.showMaximized()
+            except Exception:
+                pass
+
+        # Startup diagnostics to validate window state/geometry (temporary; can be removed later)
+        try:
+            rect = self.geometry()
+            gx, gy, gw, gh = rect.x(), rect.y(), rect.width(), rect.height()
+            print(f"[MainWindowQt] init state: isMaximized={self.isMaximized()} geom=({gx},{gy},{gw},{gh})", file=sys.stderr)
+        except Exception:
+            pass
 
     def _setup_central(self):
         self._central = QWidget(self)
