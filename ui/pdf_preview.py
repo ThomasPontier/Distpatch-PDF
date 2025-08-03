@@ -94,11 +94,21 @@ class PdfPreview(QWidget):
 
         # Toolbar
         self.toolbar = QToolBar()
-        self.zoomInAct = QAction("Zoom +", self)
-        self.zoomOutAct = QAction("Zoom -", self)
+        try:
+            # Ensure uniform icon size
+            self.toolbar.setIconSize(QSize(18, 18))
+        except Exception:
+            pass
+
+        # Actions updated to text-only (no icons)
+        self.zoomInAct = QAction("+", self)
+
+        self.zoomOutAct = QAction("-", self)
+
         self.resetZoomAct = QAction("Reset", self)
-        self.openExternAct = QAction("Open externally", self)
-        # Keep icon/text as-is; behavior will open only the current page externally
+
+        self.openExternAct = QAction("Ouvrir", self)
+        # Shortcuts/tooltips and behavior remain unchanged
 
         self.zoomInAct.triggered.connect(lambda: self._apply_zoom(1.1))
         self.zoomOutAct.triggered.connect(lambda: self._apply_zoom(1/1.1))
@@ -118,7 +128,7 @@ class PdfPreview(QWidget):
         self.scrollArea.setWidgetResizable(True)
         # Keep default styling; no special scaling tweaks required
         # self.scrollArea.setStyleSheet("QScrollArea { background: transparent; }")
-        self.imageLabel = QLabel("No preview")
+        self.imageLabel = QLabel("Aucun aperçu")
         self.imageLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.imageLabel.setBackgroundRole(QPalette.Base if hasattr(self.imageLabel, "setBackgroundRole") else None)  # safe guard
         # Keep default size policy (Expanding) to avoid unexpected scaling quirks
@@ -133,7 +143,7 @@ class PdfPreview(QWidget):
         root.addWidget(self.scrollArea)
 
         # Placeholder label for errors
-        self.placeholder = QLabel("PDF preview unavailable")
+        self.placeholder = QLabel("Aperçu PDF indisponible")
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.placeholder.setVisible(False)
         root.addWidget(self.placeholder)
@@ -149,7 +159,7 @@ class PdfPreview(QWidget):
 
     def _render_async(self):
         if not self._pdf_path or not os.path.exists(self._pdf_path):
-            self._show_placeholder(f"File not found: {self._pdf_path or ''}")
+            self._show_placeholder(f"Fichier introuvable : {self._pdf_path or ''}")
             return
 
         # Ensure any previous thread is properly shut down
@@ -177,7 +187,7 @@ class PdfPreview(QWidget):
         self._apply_scaled_pixmap()
 
     def _on_render_error(self, msg: str):
-        self._show_placeholder(f"Error rendering PDF: {msg}")
+        self._show_placeholder(f"Erreur de rendu PDF : {msg}")
 
     def _apply_zoom(self, factor: float):
         # switching to manual zoom disables fit-to-view
@@ -226,7 +236,7 @@ class PdfPreview(QWidget):
         so the user only sees the relevant stopover page. Interface unchanged.
         """
         if self._base_pixmap is None:
-            QMessageBox.information(self, "Open externally", "Aucun aperçu de page n'est disponible.")
+            QMessageBox.information(self, "Ouvrir en externe", "Aucun aperçu de page n’est disponible.")
             return
 
         try:
@@ -246,7 +256,7 @@ class PdfPreview(QWidget):
                 try:
                     os.startfile(tmp_path)  # type: ignore[attr-defined]
                 except Exception as e2:
-                    QMessageBox.warning(self, "Open externally", f"Impossible d'ouvrir l'aperçu: {e2}")
+                    QMessageBox.warning(self, "Ouvrir en externe", f"Impossible d’ouvrir l’aperçu : {e2}")
 
             # Also emit signal for listeners with path and page number for any custom handling
             try:
@@ -254,7 +264,7 @@ class PdfPreview(QWidget):
             except Exception:
                 pass
         except Exception as e:
-            QMessageBox.warning(self, "Open externally", f"Erreur lors de l'ouverture externe: {e}")
+            QMessageBox.warning(self, "Ouvrir en externe", f"Erreur lors de l’ouverture externe : {e}")
 
     def _on_thread_finished(self):
         # Called when thread finishes; delete worker and thread safely

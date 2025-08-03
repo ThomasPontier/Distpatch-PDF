@@ -90,12 +90,12 @@ class StopoverList(QWidget):
 
     def filter(self, text: str, status: str):
         t = (text or "").lower().strip()
-        st = (status or "All").lower()
+        st = (status or "Tous").lower()
         for code, item in self._items.items():
             visible = True
             if t and t not in code.lower():
                 visible = False
-            if st != "all":
+            if st != "tous":
                 # status comes from item.meta.status label text
                 visible = visible and (item.statusLabel.text().lower() == st)
             item.setVisible(visible)

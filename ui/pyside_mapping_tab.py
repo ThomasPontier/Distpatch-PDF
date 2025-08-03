@@ -1,11 +1,12 @@
 """PySide6 Mapping tab widget preserving behavior from Tkinter MappingTabComponent."""
 
 from typing import Optional, Callable, Set, List, Dict
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QMessageBox, QInputDialog, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView
+    QPushButton, QMessageBox, QInputDialog, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QStyle
 )
+from PySide6.QtGui import QIcon
 
 from services.mapping_service import MappingService
 
@@ -38,7 +39,7 @@ class MappingTabWidget(QWidget):
         # Columns: Stopover Code | Last Sent | Emails | Status (Found in PDF)
         self.table = QTableWidget(self)
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Stopover Code", "Last Sent", "Emails", "Status"])
+        self.table.setHorizontalHeaderLabels(["Code escale", "Dernier envoi", "Emails", "Statut"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
@@ -53,16 +54,40 @@ class MappingTabWidget(QWidget):
         # Actions
         actions = QHBoxLayout()
 
-        self.add_btn = QPushButton("Add/Update", self)
-        self.add_btn.setToolTip("Add a new stopover or update emails for an existing one")
+        self.add_btn = QPushButton("Ajouter/Mettre à jour", self)
+        self.add_btn.setToolTip("Ajouter une escale ou mettre à jour les emails d’une existante")
+        try:
+            # Remove icon as per spec
+            self.add_btn.setIcon(QIcon())
+            self.add_btn.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
         self.add_btn.clicked.connect(self._add_or_update_mapping)
 
-        self.edit_btn = QPushButton("Edit Selected", self)
-        self.edit_btn.setToolTip("Edit emails of the selected stopover")
+        self.edit_btn = QPushButton("Modifier la sélection", self)
+        self.edit_btn.setToolTip("Modifier les emails de l’escale sélectionnée")
+        try:
+            # Remove icon as per spec
+            self.edit_btn.setIcon(QIcon())
+            self.edit_btn.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
         self.edit_btn.clicked.connect(self._edit_selected_mapping)
 
-        self.remove_btn = QPushButton("Remove Selected", self)
-        self.remove_btn.setToolTip("Remove mapping for the selected stopover")
+        self.remove_btn = QPushButton("Supprimer la sélection", self)
+        self.remove_btn.setToolTip("Supprimer la correspondance pour l’escale sélectionnée")
+        try:
+            # Remove icon as per spec
+            self.remove_btn.setIcon(QIcon())
+            self.remove_btn.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
+        # Apply inline red styling for this destructive action button
+        self.remove_btn.setStyleSheet(
+            "QPushButton { background-color: #D32F2F; color: white; }"
+            "QPushButton:hover { background-color: #B71C1C; }"
+            "QPushButton:disabled { background-color: #BDBDBD; color: #EEEEEE; }"
+        )
         self.remove_btn.clicked.connect(self._remove_selected_mapping)
 
         actions.addStretch(1)
@@ -100,7 +125,7 @@ class MappingTabWidget(QWidget):
                 emails = mappings.get(code, [])
                 emails_str = ", ".join(emails) if emails else ""
                 last_raw = last_sent_map.get(code) or last_sent_map.get(str(code).upper()) or ""
-                status = "✓ Found" if code in (self._found_codes or set()) else "○ Not Found"
+                status = "✓ Présente" if code in (self._found_codes or set()) else "○ Absente"
 
                 self.table.setItem(row, 0, QTableWidgetItem(code))
                 self.table.setItem(row, 1, QTableWidgetItem(last_raw))
@@ -124,7 +149,7 @@ class MappingTabWidget(QWidget):
             else:
                 self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load mappings: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec du chargement des correspondances : {str(e)}")
 
     def set_found_stopovers(self, codes: Set[str]):
         """Set codes found by analysis to display and refresh the table."""
@@ -139,24 +164,24 @@ class MappingTabWidget(QWidget):
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save mappings: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de l’enregistrement des correspondances : {str(e)}")
 
     # -------- Editing actions --------
 
     def _prompt_code_and_emails(self, initial_code: str = "", initial_emails: str = "") -> Optional[tuple]:
         # Ask for stopover code
-        code, ok = QInputDialog.getText(self, "Stopover Code", "Enter stopover code (e.g., ABJ):", QLineEdit.Normal, initial_code)
+        code, ok = QInputDialog.getText(self, "Code d’escale", "Saisir le code d’escale (ex. : ABJ) :", QLineEdit.Normal, initial_code)
         if not ok:
             return None
         code = str(code).strip().upper()
         if not code:
-            QMessageBox.information(self, "Info", "Stopover code is required.")
+            QMessageBox.information(self, "Info", "Le code d’escale est requis.")
             return None
         # Ask for emails
         emails_str, ok2 = QInputDialog.getText(
             self,
-            "Email Addresses",
-            "Enter email addresses separated by commas or semicolons:",
+            "Adresses email",
+            "Saisir les adresses email séparées par des virgules ou des points-virgules :",
             QLineEdit.Normal,
             initial_emails
         )
@@ -193,13 +218,13 @@ class MappingTabWidget(QWidget):
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to add/update mapping: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de l’ajout/mise à jour : {str(e)}")
 
     def _edit_selected_mapping(self):
         """Edit emails for the selected mapping row without asking for the code again."""
         row = self.table.currentRow()
         if row is None or row < 0:
-            QMessageBox.information(self, "Info", "Please select a mapping to edit.")
+            QMessageBox.information(self, "Info", "Veuillez sélectionner une correspondance à modifier.")
             return
         code_item = self.table.item(row, 0)
         emails_item = self.table.item(row, 2)
@@ -208,8 +233,8 @@ class MappingTabWidget(QWidget):
         # Only prompt for emails; keep the selected code unchanged
         emails_str, ok = QInputDialog.getText(
             self,
-            "Edit Email Addresses",
-            f"Enter email addresses for {code} (separated by commas or semicolons):",
+            "Modifier les adresses email",
+            f"Saisir les adresses email pour {code} (séparées par des virgules ou des points-virgules) :",
             QLineEdit.Normal,
             current
         )
@@ -226,20 +251,20 @@ class MappingTabWidget(QWidget):
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to edit mapping: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de la modification : {str(e)}")
 
     def _remove_selected_mapping(self):
         """Remove mapping for the selected stopover."""
         row = self.table.currentRow()
         if row is None or row < 0:
-            QMessageBox.information(self, "Info", "Please select a mapping to remove.")
+            QMessageBox.information(self, "Info", "Veuillez sélectionner une correspondance à supprimer.")
             return
         code_item = self.table.item(row, 0)
         code = code_item.text().strip().upper() if code_item else ""
         confirm = QMessageBox.question(
             self,
-            "Confirm Removal",
-            f"Remove all email mappings for {code}?",
+            "Confirmer la suppression",
+            f"Supprimer toutes les correspondances email pour {code} ?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -253,4 +278,4 @@ class MappingTabWidget(QWidget):
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to remove mapping: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de la suppression : {str(e)}")

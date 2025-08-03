@@ -34,6 +34,9 @@ class StopoverTabWidget(QWidget):
 
         self._last_rendered_image: Optional[Image.Image] = None
 
+        # Track a last used external progress callback so helper setters can use it reliably
+        self._progress_callback: Optional[Callable[[str], None]] = None
+
         self._build_ui()
 
     def _build_ui(self):
@@ -44,7 +47,7 @@ class StopoverTabWidget(QWidget):
         splitter = QSplitter(Qt.Horizontal, self)
 
         # Left: Stopover list
-        left_group = QGroupBox("Stopover Pages", splitter)
+        left_group = QGroupBox("", splitter)
         left_v = QVBoxLayout(left_group)
         left_v.setContentsMargins(8, 8, 8, 8)
         left_v.setSpacing(6)
@@ -58,12 +61,12 @@ class StopoverTabWidget(QWidget):
         left_v.addWidget(self.stopover_list)
 
         # Right: Preview
-        right_group = QGroupBox("Page Preview", splitter)
+        right_group = QGroupBox("", splitter)
         right_v = QVBoxLayout(right_group)
         right_v.setContentsMargins(8, 8, 8, 8)
         right_v.setSpacing(6)
 
-        self.preview_label = QLabel("Select a stopover to preview its page", right_group)
+        self.preview_label = QLabel("Sélectionner une escale pour afficher sa page", right_group)
         self.preview_label.setAlignment(Qt.AlignCenter)
         self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.preview_label.setObjectName("PreviewLabel")
@@ -79,6 +82,28 @@ class StopoverTabWidget(QWidget):
         # Handle resize to refit preview
         right_group.installEventFilter(self)
         self._right_group = right_group
+
+    # ===== Status helpers (ensure final updates in all paths) =====
+    def _emit_status(self, message: str):
+        try:
+            if self._progress_callback:
+                self._progress_callback(message)
+        except Exception:
+            pass
+
+    def _set_status_loading(self):
+        self._emit_status("Chargement de l’aperçu de la page…")
+
+    def _set_status_error(self):
+        self._emit_status("Aperçu indisponible")
+
+    def _set_status_no_selection(self):
+        # Prefer a quiet UI; explicit message when nothing is selected
+        self._emit_status("Aucun aperçu")
+
+    def _set_status_idle(self):
+        # Use empty string to reduce noise as requested
+        self._emit_status("")
 
     # -------- Public API (parity) --------
 
@@ -98,8 +123,10 @@ class StopoverTabWidget(QWidget):
         self.current_pdf_path = None
         self.stopover_list.clear()
         self.preview_label.clear()
-        self.preview_label.setText("Select a stopover to preview its page")
+        self.preview_label.setText("Sélectionner une escale pour afficher sa page")
         self.close_pdf_renderer()
+        # When cleared, reflect idle/no selection status
+        self._set_status_idle()
 
     # -------- Internal behavior --------
 
@@ -113,6 +140,10 @@ class StopoverTabWidget(QWidget):
     def _on_selection_changed(self, current: Optional[QListWidgetItem], previous: Optional[QListWidgetItem]):
         try:
             if not current:
+                # Selection cleared: show no preview message and idle status
+                self.preview_label.setText("Sélectionner une escale pour afficher sa page")
+                self.preview_label.setPixmap(QPixmap())
+                self._set_status_no_selection()
                 return
             code = current.text()
             selected = None
@@ -128,7 +159,9 @@ class StopoverTabWidget(QWidget):
                     # Fallback: render preview directly using local API if available
                     self.load_page_preview(selected)
         except Exception:
-            pass
+            # On unexpected errors during selection change, surface an error state
+            self.preview_label.setText("Aperçu indisponible")
+            self._set_status_error()
 
     # New: double click opens email settings dialog directly
     def _open_email_settings_for_item(self, item: QListWidgetItem):
@@ -142,23 +175,31 @@ class StopoverTabWidget(QWidget):
                     selected = s
                     break
             if not selected:
-                QMessageBox.critical(self, "Error", "Selected stopover not found")
+                QMessageBox.critical(self, "Erreur", "Escale sélectionnée introuvable")
                 return
             if not self.controller or not hasattr(self.controller, "stopover_email_service"):
-                QMessageBox.critical(self, "Error", "Controller not available")
+                QMessageBox.critical(self, "Erreur", "Contrôleur indisponible")
                 return
             from ui.pyside_stopover_email_dialog import StopoverEmailSettingsDialog
             dlg = StopoverEmailSettingsDialog(self, selected.code, self.controller.stopover_email_service)
             dlg.exec()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to open email configuration dialog: {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec d’ouverture de la boîte de dialogue de configuration email : {str(e)}")
 
     def load_page_preview(self, stopover: Stopover, progress_callback: Callable[[str], None] = None):
+        # Persist the latest callback so helper setters can always emit status updates
+        if progress_callback:
+            self._progress_callback = progress_callback
+
         if not self.current_pdf_path:
+            # No PDF selected: do not show loading; reflect no selection/idle
+            self.preview_label.setText("Aucun aperçu")
+            self._set_status_no_selection()
             return
         try:
-            if progress_callback:
-                progress_callback("Loading page preview...")
+            # Set loading immediately
+            self._set_status_loading()
+
             if not self.pdf_renderer or self.pdf_renderer.pdf_path != self.current_pdf_path:
                 self.close_pdf_renderer()
                 self.pdf_renderer = PDFRenderer(self.current_pdf_path)
@@ -167,11 +208,13 @@ class StopoverTabWidget(QWidget):
             self._last_rendered_image = img
             # Update preview asynchronously to ensure the widget has sizes
             QTimer.singleShot(0, self._fit_and_update_preview)
+            # Ensure final idle status after successful scheduling of UI update
+            QTimer.singleShot(0, self._set_status_idle)
         except Exception as e:
-            err = f"Error loading page preview: {str(e)}"
-            if progress_callback:
-                progress_callback(err)
-            self.preview_label.setText("Preview unavailable")
+            # Error: update both preview text and status error
+            self.preview_label.setText("Aperçu indisponible")
+            self._set_status_error()
+            # Keep error message visible; do not immediately reset to idle
 
     def eventFilter(self, watched, event):
         # Refit on container resize
@@ -206,7 +249,9 @@ class StopoverTabWidget(QWidget):
             self.preview_label.setPixmap(pix)
             self.preview_label.setText("")
         except Exception:
-            self.preview_label.setText("Preview unavailable")
+            self.preview_label.setText("Aperçu indisponible")
+            # Reflect error on status as well
+            self._set_status_error()
 
     def close_pdf_renderer(self):
         if self.pdf_renderer:

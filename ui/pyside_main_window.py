@@ -17,7 +17,7 @@ from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QLabel, QPushButton,
     QHBoxLayout, QVBoxLayout, QStatusBar, QProgressBar, QTabWidget, QFrame, QSpacerItem,
-    QSizePolicy, QComboBox
+    QSizePolicy, QComboBox, QStyle
 )
 
 from controllers.app_controller import AppController
@@ -53,7 +53,7 @@ class MainWindowQt(QMainWindow):
 
     def _setup_window(self):
         cfg = self.config_service.get_window_config()
-        self.setWindowTitle("PDF Stopover Analyzer")
+        self.setWindowTitle("Analyseur d’escales PDF")
         try:
             icon_path = resource_path("assets/app.ico")
             self.setWindowIcon(QIcon(icon_path))
@@ -111,10 +111,15 @@ class MainWindowQt(QMainWindow):
         file_bar_layout.setSpacing(8)
 
         # Left side: file label + actions
-        self.file_label = QLabel("No PDF selected", self._file_bar)
+        self.file_label = QLabel("Aucun PDF sélectionné", self._file_bar)
         self.file_label.setObjectName("FileLabel")
 
-        self.select_button = QPushButton("Select PDF", self._file_bar)
+        self.select_button = QPushButton("Sélectionner un PDF", self._file_bar)
+        try:
+            self.select_button.setIcon(self.style().standardIcon(QStyle.SP_DialogOpenButton))
+            self.select_button.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
         self.select_button.clicked.connect(self._select_pdf)
 
         # Right side: Outlook account selector + status as a compact group
@@ -132,7 +137,7 @@ class MainWindowQt(QMainWindow):
         self.outlook_accounts_combo.setObjectName("OutlookAccountsCombo")
         # No explicit "Default (Outlook)" entry anymore; first enumerated account will be selected by default
         self.outlook_accounts_combo.currentIndexChanged.connect(self._on_outlook_account_changed)
-        self.outlook_accounts_combo.setToolTip("Choose the Outlook account to use")
+        self.outlook_accounts_combo.setToolTip("Choisir le compte Outlook à utiliser")
 
 
 
@@ -156,21 +161,21 @@ class MainWindowQt(QMainWindow):
             controller=self.controller,
             parent=self.tabs,
         )
-        self.tabs.addTab(self.stopover_tab, "Stopover Pages")
+        self.tabs.addTab(self.stopover_tab, "Pages d’escale")
 
         # Mapping tab
         self.mapping_tab = MappingTabWidget(
             on_mappings_change=self._on_mappings_change,
             parent=self.tabs,
         )
-        self.tabs.addTab(self.mapping_tab, "Stopover Mappings")
+        self.tabs.addTab(self.mapping_tab, "Correspondances d’escales")
 
         # Email preview tab
         self.email_preview_tab = EmailPreviewTabWidget(
             controller=self.controller,
             parent=self.tabs,
         )
-        self.tabs.addTab(self.email_preview_tab, "Email Preview")
+        self.tabs.addTab(self.email_preview_tab, "Aperçu des emails")
 
         # Trigger a refresh when switching to the Email Preview tab to ensure default previews render
         try:
@@ -184,7 +189,7 @@ class MainWindowQt(QMainWindow):
         sb = QStatusBar(self)
         self.setStatusBar(sb)
 
-        self.status_label = QLabel("Ready", self)
+        self.status_label = QLabel("Prêt", self)
         sb.addWidget(self.status_label, 1)
 
         self.progress_bar = QProgressBar(self)
@@ -216,13 +221,13 @@ class MainWindowQt(QMainWindow):
     def _select_pdf(self):
         filename, _ = QFileDialog.getOpenFileName(
             self,
-            "Select PDF file",
+            "Sélectionner un fichier PDF",
             "",
-            "PDF files (*.pdf);;All files (*)",
+            "Fichiers PDF (*.pdf);;Tous les fichiers (*)",
         )
         if filename:
             if self.controller.set_pdf_path(filename):
-                self.file_label.setText(f"Selected: {os.path.basename(filename)}")
+                self.file_label.setText(f"Sélectionné : {os.path.basename(filename)}")
                 
 
                 # Clear tabs before starting analysis
@@ -236,11 +241,11 @@ class MainWindowQt(QMainWindow):
                 self.mapping_tab.set_found_stopovers(set())
 
                 # Start analysis automatically
-                self.status_label.setText("Analyzing PDF...")
+                self.status_label.setText("Analyse du PDF…")
                 self._start_progress()
                 self.controller.analyze_pdf()
             else:
-                QMessageBox.critical(self, "Error", "Please select a valid PDF file.")
+                QMessageBox.critical(self, "Erreur", "Veuillez sélectionner un fichier PDF valide.")
 
     
 
@@ -257,7 +262,7 @@ class MainWindowQt(QMainWindow):
         self.email_preview_tab.set_pdf_path(self.controller.current_pdf_path)
 
         # Status and progress
-        self.status_label.setText(f"Found {len(stopovers)} stopover(s)")
+        self.status_label.setText(f"Escales détectées : {len(stopovers)}")
         self._stop_progress()
 
     def _update_status(self, message: str):
@@ -345,7 +350,7 @@ class MainWindowQt(QMainWindow):
                     else:
                         label = f"{display} — {smtp}"
                 else:
-                    label = display or smtp or "Outlook Account"
+                    label = display or smtp or "Compte Outlook"
                 combo.addItem(label, userData=acc.get("id"))
             # Selection behavior:
             # - If a preferred account is known and still present, select it

@@ -4,7 +4,7 @@ from typing import Optional, List
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QLineEdit,
-    QPushButton, QDialogButtonBox, QGroupBox, QWidget
+    QPushButton, QDialogButtonBox, QGroupBox, QWidget, QStyle
 )
 from models.template import Template
 

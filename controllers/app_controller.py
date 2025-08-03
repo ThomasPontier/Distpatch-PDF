@@ -71,13 +71,13 @@ class AppController:
             
             # Update UI in the main thread
             if self.on_status_update:
-                self.on_status_update(f"Found {len(self.stopovers)} stopover(s)")
+                self.on_status_update(f"Escales détectées : {len(self.stopovers)}")
             
             if self.on_analysis_complete:
                 self.on_analysis_complete(self.stopovers)
                 
         except Exception as e:
-            error_msg = f"Error analyzing PDF: {str(e)}"
+            error_msg = f"Erreur d’analyse du PDF : {str(e)}"
             if self.on_status_update:
                 self.on_status_update(error_msg)
         finally:
@@ -92,7 +92,7 @@ class AppController:
         try:
             # Show progress if callback provided
             if progress_callback:
-                progress_callback("Loading page preview...")
+                progress_callback("Chargement de l’aperçu de la page…")
             
             # Create or update PDF renderer
             if not self.pdf_renderer or self.pdf_renderer.pdf_path != self.current_pdf_path:
@@ -106,7 +106,7 @@ class AppController:
             
         except Exception as e:
             if progress_callback:
-                progress_callback(f"Error loading page preview: {str(e)}")
+                progress_callback(f"Erreur de chargement de l’aperçu de la page : {str(e)}")
             return False
     
     def check_outlook_connection(self) -> bool:
@@ -223,14 +223,14 @@ class AppController:
                     
                     if success:
                         success_count += 1
-                        print(f"Email sent for {stopover.code}")
+                        print(f"Email envoyé pour {stopover.code}")
                     else:
-                        print(f"Failed to send email for {stopover.code}")
+                        print(f"Échec d’envoi pour {stopover.code}")
             
             return success_count, total_count
             
         except Exception as e:
-            print(f"Error sending emails: {e}")
+            print(f"Erreur lors de l’envoi des emails : {e}")
             return success_count, total_count
     
     def set_current_account(self, account_id: str, account_info: dict):

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from typing import Optional, List, Callable
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QGroupBox,
-    QSplitter, QSizePolicy
+    QSplitter, QSizePolicy, QStyle
 )
 from models.template import StopoverMeta, SendStatus
 from models.stopover import Stopover  # existing model
@@ -37,7 +37,7 @@ class StopoverItem(QWidget):
         root.setContentsMargins(6, 6, 6, 6)
         root.setSpacing(8)
 
-        box = QGroupBox(f"Stopover {self.stopover.code}")
+        box = QGroupBox(f"Escale {self.stopover.code}")
         box_layout = QVBoxLayout(box)
         box_layout.setContentsMargins(8, 8, 8, 8)
         box_layout.setSpacing(8)
@@ -54,9 +54,9 @@ class StopoverItem(QWidget):
         meta_row = QHBoxLayout()
         self.statusLabel = QLabel(self.meta.status)
         self.statusLabel.setObjectName("Badge")
-        self.lastSentLabel = QLabel(f"Last sent: {self.meta.to_display_dict()['last_sent']}")
+        self.lastSentLabel = QLabel(f"Dernier envoi : {self.meta.to_display_dict()['last_sent']}")
         self.lastSentLabel.setObjectName("Badge")
-        self.overrideLabel = QLabel("Override")
+        self.overrideLabel = QLabel("Remplacement")
         self.overrideLabel.setObjectName("Badge")
         self.overrideLabel.setVisible(False)
 
@@ -68,20 +68,25 @@ class StopoverItem(QWidget):
 
         # Subject
         self.subjectEdit = QTextEdit()
-        self.subjectEdit.setPlaceholderText("Subject for this stopover")
+        self.subjectEdit.setPlaceholderText("Objet pour cette escale")
         self.subjectEdit.setFixedHeight(40)
         self.subjectEdit.textChanged.connect(self._on_text_changed)
         left_layout.addWidget(self.subjectEdit)
 
         # Body
         self.bodyEdit = QTextEdit()
-        self.bodyEdit.setPlaceholderText("Body for this stopover")
+        self.bodyEdit.setPlaceholderText("Corps pour cette escale")
         self.bodyEdit.textChanged.connect(self._on_text_changed)
         left_layout.addWidget(self.bodyEdit, 1)
 
         # Actions row
         actions = QHBoxLayout()
-        self.sendBtn = QPushButton("Send Individually")
+        self.sendBtn = QPushButton("Envoyer individuellement")
+        try:
+            self.sendBtn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+            self.sendBtn.setIconSize(QSize(18, 18))  # compact per-item action
+        except Exception:
+            pass
         self.sendBtn.clicked.connect(lambda: self.sendClicked.emit(self.stopover.code))
         actions.addStretch(1)
         actions.addWidget(self.sendBtn)
@@ -147,15 +152,15 @@ class StopoverItem(QWidget):
         """Update status and last sent labels."""
         self.statusLabel.setText(status)
         if last_sent:
-            self.lastSentLabel.setText(f"Last sent: {last_sent}")
+            self.lastSentLabel.setText(f"Dernier envoi : {last_sent}")
 
     def _validate(self):
         """Basic validation for subject/body non-empty."""
         reasons: List[str] = []
         if not self.subjectEdit.toPlainText().strip():
-            reasons.append("Subject is empty")
+            reasons.append("Objet vide")
         if not self.bodyEdit.toPlainText().strip():
-            reasons.append("Body is empty")
+            reasons.append("Corps vide")
         valid = len(reasons) == 0
         self.setSendEnabled(valid, reasons if not valid else None)
         self.validationChanged.emit(self.stopover.code, valid, reasons)

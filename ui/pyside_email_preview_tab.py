@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, QTimer, QSize
 from PySide6.QtGui import QFont, QTextOption
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QTextEdit, QPushButton, QMessageBox,
-    QScrollArea, QSizePolicy, QFrame, QLineEdit, QComboBox
+    QScrollArea, QSizePolicy, QFrame, QLineEdit, QComboBox, QStyle
 )
 from models.stopover import Stopover
 from services.mapping_service import MappingService
@@ -51,7 +51,7 @@ class StopoverEmailPreviewItem(QWidget):
         left.addWidget(title)
 
         to_line = ", ".join(recipients) if recipients else "Aucune adresse email"
-        header = QLabel(f"Objet: {subject}\nÀ: {to_line}")
+        header = QLabel(f"Objet : {subject}\nÀ : {to_line}")
         header.setTextInteractionFlags(Qt.TextSelectableByMouse)
         left.addWidget(header)
 
@@ -67,7 +67,12 @@ class StopoverEmailPreviewItem(QWidget):
         # Actions row
         actions_row = QHBoxLayout()
         actions_row.addStretch(1)
-        self.send_one_btn = QPushButton("Envoyer individuellement")
+        self.send_one_btn = QPushButton("Envoyer")
+        try:
+            self.send_one_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+            self.send_one_btn.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
         self.send_one_btn.clicked.connect(self._emit_send_one)
         actions_row.addWidget(self.send_one_btn)
 
@@ -210,7 +215,7 @@ class EmailPreviewTabWidget(QWidget):
         header.addWidget(self.info_label)
 
         header.addSpacing(16)
-        header.addWidget(QLabel("Filtre escale:"))
+        header.addWidget(QLabel("Filtre escale :"))
         # Remplace le champ texte par une liste déroulante d'escales
         self.filter_combo = QComboBox()
         # Set up defaults before wiring signals to avoid premature refresh
@@ -218,9 +223,18 @@ class EmailPreviewTabWidget(QWidget):
         header.addWidget(self.filter_combo)
 
         header.addSpacing(8)
-        header.addWidget(QLabel("Afficher:"))
+        header.addWidget(QLabel("Afficher :"))
         self.presence_combo = QComboBox()
-        self.presence_combo.addItems(["Toutes", "Avec email", "Sans email"])
+        # Keep FR labels unchanged; use stable internal codes via userData
+        try:
+            self.presence_combo.addItem("Toutes", userData="all")
+            # If UI strings ever change to "Avec e-mail"/"Sans e-mail", labels remain OK;
+            # internal codes ensure logic stays robust.
+            self.presence_combo.addItem("Avec email", userData="with")
+            self.presence_combo.addItem("Sans email", userData="without")
+        except Exception:
+            # Fallback if userData unavailable (shouldn't happen with QComboBox)
+            self.presence_combo.addItems(["Toutes", "Avec email", "Sans email"])
         # Ensure default selection before connecting signals to avoid early filtering
         self.presence_combo.setCurrentIndex(0)
         header.addWidget(self.presence_combo)
@@ -233,13 +247,14 @@ class EmailPreviewTabWidget(QWidget):
 
         # Global action: send to all
         self.send_all_button = QPushButton("Envoyer à toutes les escales")
+        try:
+            self.send_all_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+            self.send_all_button.setIconSize(QSize(20, 20))
+        except Exception:
+            pass
         self.send_all_button.clicked.connect(self._send_all_stopovers)
         header.addWidget(self.send_all_button)
 
-        # Option: ignorer les escales sans destinataires
-        self.ignore_no_recipients = QComboBox()
-        self.ignore_no_recipients.addItems(["Ignorer sans destinataire", "Inclure sans destinataire"])
-        header.addWidget(self.ignore_no_recipients)
 
         root.addLayout(header)
 
@@ -276,20 +291,20 @@ class EmailPreviewTabWidget(QWidget):
         tgl.setSpacing(6)
 
         self.template_subject = QTextEdit()
-        self.template_subject.setPlaceholderText("Sujet global avec paramètres dynamiques (ex: Stopover Report - {{stopover_code}})")
+        self.template_subject.setPlaceholderText("Sujet global avec paramètres dynamiques (ex. : Rapport d’escale – {{stopover_code}})")
         self.template_subject.setFixedHeight(40)
 
         self.template_body = QTextEdit()
-        self.template_body.setPlaceholderText("Corps de l'email avec paramètres dynamiques")
+        self.template_body.setPlaceholderText("Corps de l’email avec paramètres dynamiques")
         self.template_body.setMinimumHeight(120)
 
         # Load current global subject/body from config manager
         try:
             t = get_config_manager().get_templates()
-            subj_value = t.get("subject") or "Stopover Report - {{stopover_code}}"
+            subj_value = t.get("subject") or "Rapport d’escale – {{stopover_code}}"
             body_value = t.get("body") or self._email_service._get_default_template()
         except Exception:
-            subj_value = "Stopover Report - {{stopover_code}}"
+            subj_value = "Rapport d’escale – {{stopover_code}}"
             body_value = self._email_service._get_default_template()
 
         self.template_subject.setPlainText(subj_value)
@@ -347,7 +362,7 @@ class EmailPreviewTabWidget(QWidget):
 
     def _persist_templates_from_ui(self):
         # Debounced-ish immediate persist of templates into unified config
-        subject_template = self.template_subject.toPlainText().strip() or "Stopover Report - {{stopover_code}}"
+        subject_template = self.template_subject.toPlainText().strip() or "Rapport d’escale – {{stopover_code}}"
         body_template = self.template_body.toPlainText().strip() or self._email_service._get_default_template()
         try:
             # If the template content has changed versus last applied, clear overrides
@@ -401,10 +416,10 @@ class EmailPreviewTabWidget(QWidget):
         # Pull current global templates once
         try:
             t = get_config_manager().get_templates()
-            subject_template = t.get("subject") or "Stopover Report - {{stopover_code}}"
+            subject_template = t.get("subject") or "Rapport d’escale – {{stopover_code}}"
             body_template = t.get("body") or self._email_service._get_default_template()
         except Exception:
-            subject_template = "Stopover Report - {{stopover_code}}"
+            subject_template = "Rapport d’escale – {{stopover_code}}"
             body_template = self._email_service._get_default_template()
 
         # Load overrides map once
@@ -415,14 +430,14 @@ class EmailPreviewTabWidget(QWidget):
 
         # Appliquer les filtres
         filtered = self._apply_filters(self._stopovers)
-
-        # Fallbacks to guarantee non-empty default view when mode == "Toutes"
-        mode_txt = self.presence_combo.currentText() if hasattr(self, "presence_combo") else "Toutes"
+    
+        # Fallbacks to guarantee non-empty default view when presence mode is "all"
+        mode_code = self._current_presence_mode()
         sel_txt = self.filter_combo.currentText() if hasattr(self, "filter_combo") else "Toutes les escales"
-        if not filtered and (mode_txt == "Toutes"):
+        if not filtered and (mode_code == "all"):
             # If user intends to see all, show all regardless of mappings readiness
             filtered = list(self._stopovers)
-        if not filtered and (sel_txt.strip().upper() in ("TOUTES LES ESCALES", "")):
+        if not filtered and (mode_code == "all") and (sel_txt.strip().upper() in ("TOUTES LES ESCALES", "")):
             # If global filter is all, also default to all
             filtered = list(self._stopovers)
 
@@ -469,33 +484,56 @@ class EmailPreviewTabWidget(QWidget):
         return 210.0, 297.0  # A4 portrait
 
     # ---------- Filters and sending ----------
-
+    
+    def _has_recipients(self, stopover: Stopover) -> bool:
+        try:
+            emails = self._mappings.get(str(stopover.code).upper(), [])
+            # accept list-like truthiness
+            return bool(emails)
+        except Exception:
+            return False
+    
+    def _current_presence_mode(self) -> str:
+        """Return stable internal code: 'all' | 'with' | 'without'."""
+        try:
+            data = self.presence_combo.currentData() if hasattr(self, "presence_combo") else None
+            if isinstance(data, str) and data in ("all", "with", "without"):
+                return data
+            # Fallback to text if userData not present
+            text = self.presence_combo.currentText() if hasattr(self, "presence_combo") else "Toutes"
+            t = (text or "").strip().lower()
+            if "avec" in t:  # handles "Avec email" or "Avec e-mail"
+                return "with"
+            if "sans" in t:  # handles "Sans email" or "Sans e-mail"
+                return "without"
+            return "all"
+        except Exception:
+            return "all"
+    
     def _apply_filters(self, stopovers: List[Stopover]) -> List[Stopover]:
         # sélection d'escale via combo (1er item = Toutes les escales)
         selected = self.filter_combo.currentText() if hasattr(self, "filter_combo") else "Toutes les escales"
-        mode = self.presence_combo.currentText() if hasattr(self, "presence_combo") else "Toutes"
         selected = (selected or "").strip().upper()
-
+        mode_code = self._current_presence_mode()
+    
         def match_stopover(code: str) -> bool:
             uc = (code or "").upper()
             if not selected or selected == "TOUTES LES ESCALES":
                 return True
             return uc == selected
-
+    
         filtered = []
         for s in stopovers:
             if not match_stopover(s.code):
                 continue
-            emails = self._mappings.get(str(s.code).upper(), [])
-            # Pour "Toutes", ne pas filtrer par présence de mail
-            if mode == "Avec email" and not emails:
+            has_rec = self._has_recipients(s)
+            if mode_code == "with" and not has_rec:
                 continue
-            if mode == "Sans email" and emails:
+            if mode_code == "without" and has_rec:
                 continue
             filtered.append(s)
-        # Si le filtre "Toutes" est sélectionné mais que rien n'apparaît (ex: mappings pas encore chargés),
-        # renvoyer l'ensemble des escales en secours pour éviter une liste vide par défaut.
-        if not filtered and mode == "Toutes":
+        # Fallback only for "all" mode to avoid overriding explicit filters
+        if not filtered and mode_code == "all":
             return list(stopovers)
         return filtered
 
@@ -526,17 +564,17 @@ class EmailPreviewTabWidget(QWidget):
             QMessageBox.information(self, "Info", "Aucune escale à envoyer.")
             return
         # Confirm
-        reply = QMessageBox.question(self, "Confirmation", "Envoyer pour toutes les escales filtrées ?")
+        reply = QMessageBox.question(self, "Confirmation", "Envoyer pour toutes les escales filtrées ?")
         if reply != QMessageBox.Yes:
             return
 
         # Pull current templates
         try:
             t = get_config_manager().get_templates()
-            subject_template = t.get("subject") or "Stopover Report - {{stopover_code}}"
+            subject_template = t.get("subject") or "Rapport d’escale – {{stopover_code}}"
             body_template = t.get("body") or self._email_service._get_default_template()
         except Exception:
-            subject_template = "Stopover Report - {{stopover_code}}"
+            subject_template = "Rapport d’escale – {{stopover_code}}"
             body_template = self._email_service._get_default_template()
 
         # Load overrides map for sending
@@ -547,7 +585,8 @@ class EmailPreviewTabWidget(QWidget):
 
         sent_count = 0
         skipped_no_rec = 0
-        ignore_empty = (self.ignore_no_recipients.currentText() == "Ignorer sans destinataire") if hasattr(self, "ignore_no_recipients") else True
+        # Always ignore stopovers without recipients (safer default)
+        ignore_empty = True
 
         for s in self._apply_filters(self._stopovers):
             try:
@@ -575,9 +614,9 @@ class EmailPreviewTabWidget(QWidget):
                 print(f"[EmailPreviewTabWidget] send all failed for {s.code}: {e}")
 
         # Simple summary message after bulk send (requested)
-        msg = f"Envois effectués: {sent_count}"
+        msg = f"Envois effectués : {sent_count}"
         if skipped_no_rec:
-            msg += f"\nIgnorés (sans destinataire): {skipped_no_rec}"
+            msg += f"\nIgnorés (sans destinataire) : {skipped_no_rec}"
         QMessageBox.information(self, "Terminé", msg)
 
     def _build_attachment_for_stopover(self, stopover: Stopover) -> Optional[str]:
