@@ -9,3 +9,7 @@ __pycache__/
 dist/
 build/
 .venv/
+
+# ignore obsolete backup configs (kept out of VCS)
+config/accounts.json.bak
+config/app_config.json.bak

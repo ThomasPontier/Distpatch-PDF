@@ -1,8 +1,9 @@
 """Enhanced email service with Outlook account management (uses ConfigManager for templates)."""
 
 import os
-from typing import List, Optional, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from .config_manager import get_config_manager
 
 try:
@@ -10,6 +11,7 @@ try:
     import pythoncom  # type: ignore
     _WIN32COM_AVAILABLE = True
 except Exception as e:
+    # Keep: platform-specific import handling for Windows Outlook integration
     print(f"[EmailService][DEBUG] pywin32 not available: {e}")
     win32com = None  # type: ignore
     pythoncom = None  # type: ignore
@@ -21,7 +23,7 @@ class EmailService:
 
     DEBUG: Verbose logging is enabled to trace Outlook integration and sending flow.
     """
-    
+
     def __init__(self):
         """Initialize the email service."""
         # Legacy-selected sender (informational; kept for compatibility with AccountsService)
@@ -48,7 +50,7 @@ class EmailService:
         """
         try:
             print(f"[EmailService][DEBUG] set_current_account called: id={account_id}, info={account_info}")
-            self.current_account_email = (account_info or {}).get('email', None)
+            self.current_account_email = (account_info or {}).get("email", None)
             self.current_email_address = self.current_account_email
             self._selected_sender_email = self.current_account_email
             print(f"[EmailService][DEBUG] selected_sender_email set to: {self._selected_sender_email}")
@@ -65,7 +67,7 @@ class EmailService:
 
     def get_current_account_name(self) -> str:
         """Display name for status bar when no Outlook info is available."""
-        return self.current_email_address or 'No Account Connected'
+        return self.current_email_address or "No Account Connected"
 
     def get_current_email_address(self) -> Optional[str]:
         return self.current_email_address
@@ -159,10 +161,7 @@ class EmailService:
     # ---------- Transparency helpers ----------
     def get_effective_sender(self) -> Dict[str, Optional[str]]:
         """Return the best-known effective sender from Outlook context."""
-        return {
-            "name": self.outlook_user,
-            "email": self.current_email_address
-        }
+        return {"name": self.outlook_user, "email": self.current_email_address}
 
     def get_last_send_context(self) -> Dict[str, Any]:
         """Small info dict for UI transparency after send."""
@@ -220,11 +219,9 @@ class EmailService:
                         acc_id = None
                     if not acc_id:
                         acc_id = f"acc:{i}"
-                    result.append({
-                        "id": str(acc_id),
-                        "display_name": str(display_name),
-                        "smtp_address": str(smtp) if smtp else None
-                    })
+                    result.append(
+                        {"id": str(acc_id), "display_name": str(display_name), "smtp_address": str(smtp) if smtp else None}
+                    )
                 except Exception as e_item:
                     print(f"[EmailService][DEBUG] Failed to read account {i}: {e_item}")
                     continue
@@ -264,13 +261,15 @@ class EmailService:
         return None
 
     # ---------- Sending ----------
-    def send_email(self,
-                   to_emails: List[str],
-                   subject: str,
-                   body: str,
-                   attachment_path: Optional[str] = None,
-                   cc_emails: Optional[List[str]] = None,
-                   bcc_emails: Optional[List[str]] = None) -> bool:
+    def send_email(
+        self,
+        to_emails: List[str],
+        subject: str,
+        body: str,
+        attachment_path: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+    ) -> bool:
         """Send an email using Outlook. Best-effort apply preferred Outlook account if set."""
         print(f"[EmailService][DEBUG] send_email called")
         print(f"[EmailService][DEBUG]   to={to_emails}")
@@ -290,7 +289,7 @@ class EmailService:
         if not _WIN32COM_AVAILABLE:
             print("[EmailService][DEBUG] Cannot send: pywin32 not available")
             return False
-        
+
         try:
             if not self.outlook:
                 print("[EmailService][DEBUG] Outlook object is None")
@@ -304,7 +303,7 @@ class EmailService:
                 mail.BCC = "; ".join(bcc_emails)
             mail.Subject = subject or ""
             mail.Body = body or ""
-            
+
             if attachment_path:
                 if os.path.exists(attachment_path):
                     mail.Attachments.Add(attachment_path)
@@ -335,26 +334,25 @@ class EmailService:
             self._last_send_context = {
                 "attempted_account_id": attempted_account_id,
                 "applied_preferred": applied_account,
-                "effective_sender": {
-                    "name": self.outlook_user,
-                    "email": self.current_email_address
-                }
+                "effective_sender": {"name": self.outlook_user, "email": self.current_email_address},
             }
 
             mail.Send()
             print("[EmailService][DEBUG] Mail.Send() invoked successfully")
             return True
-            
+
         except Exception as e:
             print(f"[EmailService][DEBUG] Failed to send email via Outlook: {e}")
             return False
 
     # ---------- Stopover helper and templates ----------
-    def send_stopover_email(self,
-                            stopover_code: str,
-                            recipient_emails: List[str],
-                            pdf_path: str,
-                            template_path: str = "config/email_template.txt") -> bool:
+    def send_stopover_email(
+        self,
+        stopover_code: str,
+        recipient_emails: List[str],
+        pdf_path: str,
+        template_path: str = "config/email_template.txt",
+    ) -> bool:
         """Send email for a specific stopover with PDF attachment."""
         if not os.path.exists(pdf_path):
             print(f"PDF file not found: {pdf_path}")
@@ -371,11 +369,11 @@ class EmailService:
         try:
             template_file = Path(template_path)
             if template_file.exists():
-                return template_file.read_text(encoding='utf-8')
+                return template_file.read_text(encoding="utf-8")
         except Exception as e:
             print(f"Failed to load template: {e}")
         return None
-    
+
     def _get_default_template(self) -> str:
         """Get default email template."""
         return """Dear Team,
@@ -386,8 +384,8 @@ This report contains all relevant information for this stopover location.
 
 Best regards,
 PDF Stopover Analyzer"""
-    
-    def _load_templates_json(self) -> (str, str):
+
+    def _load_templates_json(self) -> tuple[str, str]:
         """Load subject and body from centralized ConfigManager (JSON-backed)."""
         try:
             manager = get_config_manager()

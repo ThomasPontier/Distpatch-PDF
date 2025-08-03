@@ -1,15 +1,15 @@
 """Service for managing stopover-specific email configurations backed by ConfigManager."""
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional
+
 from .config_manager import get_config_manager
 
 
 @dataclass
 class StopoverEmailConfig:
     """Configuration for stopover-specific email settings."""
-    
+
     stopover_code: str
     subject_template: str = "Stopover Report - {{stopover_code}}"
     body_template: str = """Dear Team,
@@ -25,7 +25,7 @@ PDF Stopover Analyzer"""
     bcc_recipients: List[str] = None
     is_enabled: bool = True
     last_sent_at: Optional[str] = None  # ISO 8601 UTC timestamp e.g. "2025-07-31T10:22:45Z"
-    
+
     def __post_init__(self):
         """Initialize default lists if None."""
         if self.recipients is None:
@@ -34,9 +34,9 @@ PDF Stopover Analyzer"""
             self.cc_recipients = []
         if self.bcc_recipients is None:
             self.bcc_recipients = []
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StopoverEmailConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> "StopoverEmailConfig":
         """Create StopoverEmailConfig from dictionary (backward compatible)."""
         # Fill missing fields with defaults
         data = dict(data or {})
@@ -46,7 +46,7 @@ PDF Stopover Analyzer"""
         data.setdefault("is_enabled", True)
         data.setdefault("last_sent_at", None)
         return cls(**data)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert StopoverEmailConfig to dictionary."""
         return asdict(self)
@@ -80,14 +80,11 @@ class StopoverEmailService:
     def save_config(self, config: StopoverEmailConfig) -> bool:
         """Persist recipients/enablement/last_sent via ConfigManager."""
         code = str(config.stopover_code).upper()
-        # enable/disable
         if config.is_enabled:
             self._manager.add_stopover(code)
         else:
             self._manager.remove_stopover(code)
-        # recipients
         self._manager.set_mapping(code, list(config.recipients or []))
-        # last sent
         if config.last_sent_at:
             self._manager.set_last_sent(code, config.last_sent_at)
         return True
@@ -104,17 +101,14 @@ class StopoverEmailService:
     def delete_config(self, stopover_code: str) -> bool:
         code = str(stopover_code).upper()
         changed = False
-        # remove mapping
         maps = self._manager.get_mappings()
         if code in maps:
             self._manager.remove_mapping(code)
             changed = True
-        # remove from stopovers
         stops = self._manager.get_stopovers()
         if code in stops:
             self._manager.remove_stopover(code)
             changed = True
-        # clear last sent
         last = self._manager.get_last_sent()
         if code in last:
             self._manager.clear_last_sent(code)
@@ -131,7 +125,6 @@ class StopoverEmailService:
             enabled[code] = self.get_config(code)
         return enabled
 
-    # New: last sent date tracking
     def set_last_sent_now(self, stopover_code: str) -> None:
         code = str(stopover_code).upper()
         self._manager.set_last_sent(code)
@@ -140,7 +133,7 @@ class StopoverEmailService:
         code = str(stopover_code).upper()
         return self._manager.get_last_sent().get(code)
 
-    # Templates loader now defers to ConfigManager
     def _load_templates_json(self) -> "tuple[str, str]":
+        """Load subject/body from unified ConfigManager templates."""
         t = self._manager.get_templates()
         return t.get("subject", "Stopover Report - {{stopover_code}}"), t.get("body", "")

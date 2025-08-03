@@ -6,17 +6,14 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
+    # NOTE: Bundling the entire 'config/' directory is kept for now for continuity.
+    # This may be revisited depending on the runtime configuration strategy.
     datas=[
         ('config', 'config'),
         ('ui/style_pyside.qss', 'ui'),
         ('assets', 'assets'),
     ],
-    hiddenimports=[
-        'tkinter',
-        'tkinter.ttk',
-        'tkinter.filedialog',
-        'tkinter.messagebox',
-    ],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

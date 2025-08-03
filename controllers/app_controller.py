@@ -1,19 +1,19 @@
 """Application controller to coordinate between UI and services."""
 
 import threading
-from typing import List, Set, Optional, Callable, Dict
+from typing import Callable, Dict, List, Optional, Set
+
 from core.pdf_processor import PDFProcessor
 from core.pdf_renderer import PDFRenderer
 from models.stopover import Stopover
 from services.email_service import EmailService
 from services.mapping_service import MappingService
-from services.stopover_email_service import StopoverEmailService, StopoverEmailConfig
+from services.stopover_email_service import StopoverEmailConfig, StopoverEmailService
 from utils.file_utils import validate_pdf_file
 
 
 class AppController:
     """Controller class to manage application logic and coordinate components."""
-    
     def __init__(self):
         """Initialize the application controller."""
         # Initialize services
@@ -61,7 +61,7 @@ class AppController:
         thread.start()
         return True
     
-    def _analyze_pdf_thread(self):
+    def _analyze_pdf_thread(self) -> None:
         """Thread function for PDF analysis."""
         try:
             self.stopovers = self.pdf_processor.analyze_pdf(self.current_pdf_path)
@@ -84,7 +84,11 @@ class AppController:
             if self.on_progress_stop:
                 self.on_progress_stop()
     
-    def load_page_preview(self, stopover: Stopover, progress_callback: Optional[Callable[[str], None]] = None) -> bool:
+    def load_page_preview(
+        self,
+        stopover: Stopover,
+        progress_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
         """Load and display page preview for a stopover."""
         if not self.current_pdf_path:
             return False
@@ -147,7 +151,7 @@ class AppController:
             
             return False
     
-    def disconnect_from_outlook(self):
+    def disconnect_from_outlook(self) -> None:
         """Disconnect from Outlook and update state."""
         self.email_service.disconnect_from_outlook()
         self.outlook_connected = False
@@ -233,7 +237,7 @@ class AppController:
             print(f"Erreur lors de l’envoi des emails : {e}")
             return success_count, total_count
     
-    def set_current_account(self, account_id: str, account_info: dict):
+    def set_current_account(self, account_id: str, account_info: dict) -> None:
         """Set the current email account."""
         self.email_service.set_current_account(account_id, account_info)
     
@@ -245,20 +249,20 @@ class AppController:
         """Get the current email address."""
         return self.email_service.get_current_email_address()
     
-    def close_pdf_renderer(self):
+    def close_pdf_renderer(self) -> None:
         """Close the PDF renderer if it's open."""
         if self.pdf_renderer:
             self.pdf_renderer.close()
             self.pdf_renderer = None
     
-    def clear_state(self):
+    def clear_state(self) -> None:
         """Clear all application state."""
         self.current_pdf_path = None
         self.stopovers.clear()
         self.found_stopover_codes.clear()
         self.close_pdf_renderer()
     
-    def destroy(self):
+    def destroy(self) -> None:
         """Clean up resources when destroying the controller."""
         self.close_pdf_renderer()
         self.disconnect_from_outlook()

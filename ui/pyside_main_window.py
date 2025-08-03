@@ -87,13 +87,6 @@ class MainWindowQt(QMainWindow):
             except Exception:
                 pass
 
-        # Startup diagnostics to validate window state/geometry (temporary; can be removed later)
-        try:
-            rect = self.geometry()
-            gx, gy, gw, gh = rect.x(), rect.y(), rect.width(), rect.height()
-            print(f"[MainWindowQt] init state: isMaximized={self.isMaximized()} geom=({gx},{gy},{gw},{gh})", file=sys.stderr)
-        except Exception:
-            pass
 
     def _setup_central(self):
         self._central = QWidget(self)

@@ -1,19 +1,18 @@
 """Configuration service for managing application settings (backward-compat shim around ConfigManager)."""
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from .config_manager import get_config_manager
 
 
 class ConfigService:
     """Backward compatibility facade.
-    
+
     This class now delegates persisted configuration responsibilities to the
     centralized ConfigManager. Legacy methods return empty/defaults or no-ops
     to avoid persisting deprecated state.
     """
-    
     def __init__(self, config_dir: str = "config"):
         # Keep minimal compatibility for callers expecting a path
         self.config_dir = Path(config_dir)
