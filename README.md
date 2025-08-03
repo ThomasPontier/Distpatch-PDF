@@ -1,7 +1,9 @@
-# Distpatch-PDF
+# Distpatch-PDF   <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/961dd65f-c137-4572-b4de-15e662e3822e" />
+
+
 
 Application Windows pour analyser des PDF, détecter des pages « escale », prévisualiser et préparer l’envoi par email via Outlook.
-
+ 
 Dernière mise à jour : 2025-08-03
 
 ## Sommaire
