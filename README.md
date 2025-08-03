@@ -1,137 +1,124 @@
-# PDF Stopover Analyzer
+# Distpatch-PDF
 
-A standalone desktop application for analyzing PDF documents to find stopover pages based on specific text patterns.
-UI implemented with PySide6 (Qt for Python), styled via QSS.
+Application Windows pour analyser des PDF, détecter des pages « escale », prévisualiser et préparer l’envoi par email via Outlook.
 
-## Features
+Dernière mise à jour : 2025-08-03
 
-- **PDF File Selection**: Browse and select PDF files from your computer
-- **Stopover Detection**: Automatically finds pages containing both:
-  - A stopover code in format `[XYZ]-Bilan` (where XYZ is any 3 uppercase letters)
-  - The word "objectifs" (case-insensitive)
-- **Visual Results**: Displays a list of all found stopover pages with their codes
-- **Page Preview**: Double-click any stopover to see a preview of the corresponding PDF page
-- **Cross-platform**: Works on Windows, macOS, and Linux
+## Sommaire
+
+- [Introduction](#introduction)
+- [Prérequis](#prérequis)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Utilisation](#utilisation)
+- [Développement](#développement)
+- [FAQ](#faq)
+
+## Introduction
+
+But
+- Détecter automatiquement dans un PDF les pages contenant un code escale « AAA-Bilan » et le mot « objectifs ».
+- Lister les escales détectées et prévisualiser la page.
+- Préparer l’envoi d’emails via Outlook avec des modèles personnalisables.
+
+Cas d’usage
+- Contrôle rapide d’un rapport PDF multi-escales.
+- Préparation d’emails par escale selon un mapping escale → destinataires.
+
+Limitations
+- Windows uniquement (intégration Outlook via pywin32). macOS/Linux non supportés pour l’envoi d’emails.
+
+## Prérequis
+
+- Windows 10/11 (x64)
+- Python 3.8+ (recommandé)
+- Outlook configuré (profil actif) pour l’envoi
+- Dépendances : voir [`requirements.txt`](requirements.txt)
 
 ## Installation
 
-### Requirements
-- Python 3.7 or higher
-- Required packages listed in `requirements.txt`
-
-### Install Dependencies
-Create and activate a virtual environment, then install dependencies:
+Créer l’environnement et installer
 ```bash
 python -m venv .venv
-# Windows
 .venv\Scripts\activate
-# macOS/Linux
-# source .venv/bin/activate
-
 pip install -r requirements.txt
 ```
 
-### Run from Source
+Lancer depuis les sources
 ```bash
 python main.py
 ```
 
-### Create Executable (Windows)
-1. Place your application icon in `assets/app.ico`
-2. Run the build script:
+Créer un exécutable (Windows)
 ```bash
 python build.py
 ```
-Or build directly with PyInstaller:
+
+## Configuration
+
+Emplacement du fichier
+- Développement : `config/app_config.json`
+- Exécutable : `%APPDATA%\Distpatch-PDF\config\app_config.json` (créé au besoin)
+
+Exemple minimal
+```json
+{
+  "version": 1,
+  "stopovers": ["CDG"],
+  "mappings": { "CDG": ["ops.cdg@example.com"] },
+  "templates": { "subject": "Bilan {STOPOVER}", "body": "Bonjour,\nBilan {STOPOVER}." },
+  "last_sent": {}
+}
+```
+
+
+## Utilisation
+
+Flux rapide
+1) Ouvrir l’application (ou `python main.py`)  
+2) Sélectionner un PDF  
+3) Cliquer « Analyser »  
+4) Parcourir les escales détectées et prévisualiser  
+5) Préparer l’envoi Outlook (Windows)
+
+Règles de détection
+- Code « AAA-Bilan » (AAA = 3 lettres majuscules)
+- Mot « objectifs » présent sur la même page (casse insensible)
+
+Erreurs fréquentes
+- « No module named 'fitz' » : installer PyMuPDF
 ```bash
+pip install PyMuPDF
+```
+- « Error opening PDF » : vérifier l’intégrité/droits du fichier
+- « No stopover pages found » : vérifier le motif exact « AAA-Bilan » et la présence de « objectifs »
+
+## Développement
+
+Points clés
+- Entrée : [`main.py`](main.py)
+- UI : PySide6 (fenêtre principale : [`ui.pyside_main_window.py`](ui/pyside_main_window.py))
+- Détection/rendu PDF : [`core/`](core/)
+- Configuration unifiée : [`services.config_manager`](services/config_manager.py)
+
+Commandes
+```bash
+python main.py
+python build.py
 pyinstaller distpatch_pdf.spec
 ```
-Ensure assets are bundled:
-- `ui/style_pyside.qss`
-- `assets/app.ico`
 
-The executable will be created in the `dist` folder.
+## FAQ
 
-### Configuration Management
-- On first run, the application creates a default configuration file at:
-  - Windows (packaged): `%APPDATA%\Distpatch-PDF\config\app_config.json`
-  - Development: `config/app_config.json`
-- Configuration is automatically updated on each subsequent execution when settings change
-- The configuration includes stopover mappings, email templates, and last sent timestamps
+macOS/Linux sont-ils supportés ?
+- Non pour l’envoi d’emails (pywin32/Outlook est Windows-only). L’application est ciblée Windows.
 
-## Usage
+Où se trouve la configuration packagée ?
+- `%APPDATA%\Distpatch-PDF\config\app_config.json`.
 
-1. **Launch the Application**: Run the executable or `python main.py`
-2. **Select PDF**: Click "Select PDF" to choose a PDF file
-3. **Analyze**: Click "Analyze" to process the PDF
-4. **View Results**: Found stopovers will appear in the left panel
-5. **Preview Pages**: Double-click any stopover to preview its page
+Peut-on personnaliser l’objet/le corps d’email ?
+- Oui via `templates.subject` et `templates.body` dans `app_config.json` (placeholder : `{STOPOVER}`).
 
-## Project Structure
 
-```
-pdf_stopover_analyzer/
-├── main.py                 # Application entry point
-├── models/
-│   └── stopover.py        # Data model for stopover information
-├── ui/
-│   └── pyside_main_window.py  # Main GUI window
-├── core/
-│   ├── pdf_analyzer.py    # PDF text analysis logic
-│   └── pdf_renderer.py    # PDF page rendering
-├── utils/
-│   └── file_utils.py      # File handling utilities
-├── services/
-│   ├── config_manager.py  # Centralized configuration management
-│   └── config_service.py  # Backward compatibility facade
-├── tests/
-│   └── test_pdf_analyzer.py  # Unit tests
-├── config/                # Default configuration files
-├── assets/                # Application assets (icons, images)
-├── ui/style_pyside.qss    # PySide6 stylesheet
-├── requirements.txt       # Python dependencies
-├── distpatch_pdf.spec     # PyInstaller configuration
-├── build.py              # Build script
-└── README.md             # This file
-```
 
-## Technical Details
-
-### Dependencies
-- **PyMuPDF (fitz)**: PDF processing and rendering
-- **Pillow**: Image handling for page previews
-- **PyInstaller**: Executable creation
-- **pywin32**: Windows Outlook automation (win32com)
-
-### Pattern Matching
-- Stopover codes must be exactly 3 uppercase letters followed by "-Bilan"
-- The word "objectifs" must appear on the same page (case-insensitive)
-- Examples: "CDG-Bilan", "LHR-Bilan", "JFK-Bilan"
-
-## Testing
-
-Run unit tests:
-```bash
-python -m pytest tests/
-```
-
-## Troubleshooting
-
-Windows/Outlook integration requires pywin32 and a configured Outlook profile.
-
-### Common Issues
-
-1. **"No module named 'fitz'"**
-   - Install PyMuPDF: `pip install PyMuPDF`
-
-2. **"Error opening PDF"**
-   - Ensure the PDF file is not corrupted
-   - Check file permissions
-
-3. **"No stopover pages found"**
-   - Verify the PDF contains pages with both required patterns
-   - Check that stopover codes are in the correct format
-
-## License
-
-This project is provided as-is for educational and practical use.
+Licence : usage éducatif et pratique, sans garantie.
