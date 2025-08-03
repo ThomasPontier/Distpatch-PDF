@@ -53,41 +53,115 @@ PDF Stopover Analyzer"""
 
 
 class StopoverEmailService:
-    """Facade over ConfigManager for stopover emails (mappings/stopovers/last_sent/templates)."""
+    """Facade over ConfigManager for stopover emails (mappings/stopovers/last_sent/templates).
+
+    DRY contract:
+    - Single source of truth remains ConfigManager.
+    - Backward compatible with mappings: list[str] (legacy 'To' only).
+    - Adds CC/BCC persistence by encoding them into mappings using a tagged shape:
+        - If mappings[CODE] is a list[str], treat as 'To' only (legacy).
+        - If mappings[CODE] is a dict, we expect keys: {"to": [...], "cc": [...], "bcc": [...]}.
+      ConfigManager currently sanitizes mappings to lists; we therefore store cc/bcc in a compact
+      sidecar convention inside the 'to' list using sentinel tags. This keeps a single field and
+      avoids schema migration while staying fully reversible:
+         - "__CC__:" + email value for each CC
+         - "__BCC__:" + email value for each BCC
+      On read, we split these back out; on write, we re-encode. Plain emails remain 'To'.
+    """
+
+    _CC_TAG = "__CC__:"
+    _BCC_TAG = "__BCC__:"
 
     def __init__(self, config_dir: str = "config"):
         # config_dir retained for compatibility; not used for persistence anymore.
         self._manager = get_config_manager()
 
+    @staticmethod
+    def _encode_recipients(to_list, cc_list, bcc_list) -> list:
+        encoded = []
+        for e in to_list or []:
+            s = str(e).strip()
+            if s:
+                encoded.append(s)
+        for e in cc_list or []:
+            s = str(e).strip()
+            if s:
+                encoded.append(f"{StopoverEmailService._CC_TAG}{s}")
+        for e in bcc_list or []:
+            s = str(e).strip()
+            if s:
+                encoded.append(f"{StopoverEmailService._BCC_TAG}{s}")
+        return encoded
+
+    @staticmethod
+    def _decode_recipients(encoded_list) -> tuple[list, list, list]:
+        to_list, cc_list, bcc_list = [], [], []
+        for raw in encoded_list or []:
+            s = str(raw).strip()
+            if not s:
+                continue
+            if s.startswith(StopoverEmailService._CC_TAG):
+                cc = s[len(StopoverEmailService._CC_TAG):].strip()
+                if cc:
+                    cc_list.append(cc)
+            elif s.startswith(StopoverEmailService._BCC_TAG):
+                bcc = s[len(StopoverEmailService._BCC_TAG):].strip()
+                if bcc:
+                    bcc_list.append(bcc)
+            else:
+                to_list.append(s)
+        return to_list, cc_list, bcc_list
+
     def get_config(self, stopover_code: str) -> StopoverEmailConfig:
-        """Build StopoverEmailConfig based on unified config state."""
+        """Build StopoverEmailConfig based on unified config state (with CC/BCC decode)."""
         code = str(stopover_code).upper()
         t = self._manager.get_templates()
         maps = self._manager.get_mappings()
         last = self._manager.get_last_sent()
         is_enabled = self._manager.is_stopover_enabled(code)
+
+        encoded = list(maps.get(code, []))
+        to_list, cc_list, bcc_list = self._decode_recipients(encoded)
+
         return StopoverEmailConfig(
             stopover_code=code,
             subject_template=t.get("subject", "Stopover Report - {{stopover_code}}"),
             body_template=t.get("body", ""),
-            recipients=list(maps.get(code, [])),
-            cc_recipients=[],
-            bcc_recipients=[],
+            recipients=to_list,
+            cc_recipients=cc_list,
+            bcc_recipients=bcc_list,
             is_enabled=is_enabled,
             last_sent_at=last.get(code),
         )
 
     def save_config(self, config: StopoverEmailConfig) -> bool:
-        """Persist recipients/enablement/last_sent via ConfigManager."""
+        """Persist recipients/enablement/last_sent via ConfigManager (with CC/BCC encode)."""
         code = str(config.stopover_code).upper()
         if config.is_enabled:
             self._manager.add_stopover(code)
         else:
             self._manager.remove_stopover(code)
-        self._manager.set_mapping(code, list(config.recipients or []))
+
+        encoded = self._encode_recipients(
+            list(config.recipients or []),
+            list(config.cc_recipients or []),
+            list(config.bcc_recipients or []),
+        )
+        # Store back as a flat list; ConfigManager schema remains unchanged
+        self._manager.set_mapping(code, encoded)
+
         if config.last_sent_at:
             self._manager.set_last_sent(code, config.last_sent_at)
         return True
+
+    def get_all_configs(self) -> Dict[str, StopoverEmailConfig]:
+        """Return all known stopovers from union of stopovers and mappings keys."""
+        stopovers = set(self._manager.get_stopovers())
+        stopovers.update(self._manager.get_mappings().keys())
+        result: Dict[str, StopoverEmailConfig] = {}
+        for code in sorted(stopovers):
+            result[code] = self.get_config(code)
+        return result
 
     def get_all_configs(self) -> Dict[str, StopoverEmailConfig]:
         """Return all known stopovers from union of stopovers and mappings keys."""

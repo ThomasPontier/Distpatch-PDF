@@ -19,18 +19,18 @@ from services.mapping_service import MappingService
 
 class StopoverEmailSettingsDialog(QtWidgets.QDialog):
     """
-    Native PySide6 dialog to configure stopover email settings.
+    Boîte de dialogue PySide6 pour configurer les emails d’une escale.
 
-    Fields:
-      - To, Cc, Bcc (comma/semicolon separated)
-      - Subject (QLineEdit)
-      - Template selection (QComboBox) and read-only preview (QPlainTextEdit)
-      - Include PDF attachment (QCheckBox) - mapped locally; service does not currently persist this
+    Champs:
+      - À, CC, CCI (séparées par des virgules)
+      - Sujet (QLineEdit)
+      - Sélection de modèle (QComboBox) et aperçu en lecture seule (QPlainTextEdit)
+      - Inclure la pièce jointe PDF (QCheckBox) — option locale, non persistée par le service
     """
 
     def __init__(self, parent: QtWidgets.QWidget, stopover_code: str, email_service: StopoverEmailService):
         super().__init__(parent)
-        self.setWindowTitle(f"Email Settings - {str(stopover_code).upper()}")
+        self.setWindowTitle(f"Paramètres email — {str(stopover_code).upper()}")
         self.resize(700, 520)
 
         self._parent = parent
@@ -60,31 +60,31 @@ class StopoverEmailSettingsDialog(QtWidgets.QDialog):
         self.cc_edit = QLineEdit(self)
         self.bcc_edit = QLineEdit(self)
 
-        form.addRow(QLabel("To:"), self.to_edit)
-        form.addRow(QLabel("Cc:"), self.cc_edit)
-        form.addRow(QLabel("Bcc:"), self.bcc_edit)
+        form.addRow(QLabel("À:"), self.to_edit)
+        form.addRow(QLabel("CC:"), self.cc_edit)
+        form.addRow(QLabel("CCI:"), self.bcc_edit)
 
         # Subject
         self.subject_edit = QLineEdit(self)
-        form.addRow(QLabel("Subject:"), self.subject_edit)
+        form.addRow(QLabel("Sujet :"), self.subject_edit)
 
         # Template select and preview
         tmpl_row = QHBoxLayout()
         self.template_combo = QComboBox(self)
         self.template_combo.setMinimumWidth(220)
-        tmpl_row.addWidget(QLabel("Template:"))
+        tmpl_row.addWidget(QLabel("Modèle :"))
         tmpl_row.addWidget(self.template_combo, 1)
 
         self.preview = QPlainTextEdit(self)
         self.preview.setReadOnly(True)
-        self.preview.setPlaceholderText("Template preview")
+        self.preview.setPlaceholderText("Aperçu du modèle")
 
         root.addLayout(form)
         root.addLayout(tmpl_row)
         root.addWidget(self.preview, 1)
 
         # Attachment option
-        self.attach_pdf_chk = QCheckBox("Include PDF attachment", self)
+        self.attach_pdf_chk = QCheckBox("Inclure la pièce jointe PDF", self)
         self.attach_pdf_chk.setChecked(True)
         root.addWidget(self.attach_pdf_chk)
 
@@ -92,7 +92,7 @@ class StopoverEmailSettingsDialog(QtWidgets.QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
         self.ok_btn = QPushButton("OK", self)
-        self.cancel_btn = QPushButton("Cancel", self)
+        self.cancel_btn = QPushButton("Annuler", self)
         self.ok_btn.clicked.connect(self._on_ok)
         self.cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(self.ok_btn)
@@ -155,7 +155,7 @@ class StopoverEmailSettingsDialog(QtWidgets.QDialog):
         subj = self._render_subject(self.subject_edit.text())
         body = self._render_body()
         lines = []
-        lines.append(f"Subject: {subj}")
+        lines.append(f"Sujet : {subj}")
         lines.append("")
         lines.append(body)
         self.preview.setPlainText("\n".join(lines))
@@ -167,10 +167,10 @@ class StopoverEmailSettingsDialog(QtWidgets.QDialog):
         subject_text = (self.subject_edit.text() or "").strip()
 
         if not to_list:
-            QMessageBox.critical(self, "Validation Error", "The 'To' field must contain at least one email.")
+            QMessageBox.critical(self, "Erreur de validation", "Le champ 'À' doit contenir au moins une adresse.")
             return
         if not subject_text:
-            QMessageBox.critical(self, "Validation Error", "Subject must not be empty.")
+            QMessageBox.critical(self, "Erreur de validation", "Le sujet ne doit pas être vide.")
             return
 
         # Persist into config

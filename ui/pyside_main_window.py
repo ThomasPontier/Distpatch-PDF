@@ -286,6 +286,12 @@ class MainWindowQt(QMainWindow):
                     self.email_preview_tab.set_pdf_path(self.controller.current_pdf_path)
             except Exception:
                 pass
+        # Additionally, when configs are updated elsewhere (e.g., StopoverEmailSettingsDialog),
+        # ensure the Mapping tab reflects unified mappings immediately.
+        try:
+            self.mapping_tab.load_mappings()
+        except Exception:
+            pass
 
     def _on_stopover_select(self, stopover):
         # Delegate to stopover tab: it handles rendering preview and status updates

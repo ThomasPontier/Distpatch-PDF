@@ -50,9 +50,61 @@ class StopoverEmailPreviewItem(QWidget):
         title.setFont(font)
         left.addWidget(title)
 
-        to_line = ", ".join(recipients) if recipients else "Aucune adresse email"
-        header = QLabel(f"Objet : {subject}\nÀ : {to_line}")
-        header.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        # Build clickable "À:" line to open the StopoverEmailSettingsDialog
+        # We wrap the whole recipients block into an anchor to keep implementation simple.
+        # If there is no recipient, still allow click to open the dialog.
+        to_line_plain = ", ".join(recipients) if recipients else "Aucune adresse email"
+        # Use a custom scheme to avoid external opening; we'll handle linkActivated.
+        to_href = f"stopover://{(stopover.code or '').upper()}"
+        header = QLabel()
+        header.setTextFormat(Qt.RichText)
+        header.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        header.setOpenExternalLinks(False)
+        header.setText(f"Objet&nbsp;: {subject}<br/>À&nbsp;: <a href=\"{to_href}\" style=\"text-decoration: underline; color: #0F056B;\">{to_line_plain}</a>")
+        header.setToolTip("Cliquer pour configurer les destinataires de cette escale")
+        # Visual affordance through cursor via stylesheet
+        header.setStyleSheet("a { text-decoration: underline; }")
+        # Connect link activation to open the settings dialog
+        from PySide6.QtCore import Slot
+        @Slot(str)
+        def _on_header_link(_href: str):
+            try:
+                # Lazy import to avoid top-level coupling
+                from ui.pyside_stopover_email_dialog import StopoverEmailSettingsDialog
+                # Find a suitable parent tab to access its StopoverEmailService and refresh API
+                parent_widget = self.parent()
+                tab_widget = None
+                w = parent_widget
+                # Walk up to find EmailPreviewTabWidget
+                while w is not None:
+                    if isinstance(w, EmailPreviewTabWidget):
+                        tab_widget = w
+                        break
+                    w = w.parent()
+                if tab_widget is None:
+                    # Fallback: open with local service instance if tab not found (shouldn't happen)
+                    local_service = StopoverEmailService()
+                    dlg = StopoverEmailSettingsDialog(self, self.stopover.code, local_service)
+                    if dlg.exec():
+                        # No direct refresh handle; try to trigger a safe rebuild if tab exists later
+                        pass
+                    return
+                # Use the tab's shared StopoverEmailService instance to keep config unified
+                dlg = StopoverEmailSettingsDialog(tab_widget, self.stopover.code, tab_widget._stopover_email_service)
+                if dlg.exec():
+                    # After saving, refresh mappings so recipients update immediately
+                    try:
+                        tab_widget.refresh_recipients_from_configs()
+                    except Exception:
+                        # As a fallback, rebuild items directly
+                        try:
+                            tab_widget._rebuild_items_async()
+                        except Exception:
+                            pass
+            except Exception as e:
+                # Non-blocking error reporting to console
+                print(f"[StopoverEmailPreviewItem] Failed to open email settings: {e}")
+        header.linkActivated.connect(_on_header_link)
         left.addWidget(header)
 
         self.body_view = QTextEdit()
@@ -193,10 +245,13 @@ class EmailPreviewTabWidget(QWidget):
         self.controller = controller
         self._stopovers: List[Stopover] = []
         self._pdf_path: Optional[str] = None
+        # Legacy mappings cache (kept for backward compatibility where used)
         self._mappings: Dict[str, List[str]] = {}
         self._mapping_service = MappingService()
         self._email_service = EmailService()
         self._stopover_email_service = StopoverEmailService()
+        # Unified per-stopover configs cache { CODE: {"to":[], "cc":[], "bcc":[] } }
+        self._email_configs: Dict[str, Dict[str, List[str]]] = {}
         self._build_ui()
         # track last applied template to detect global template changes
         self._last_template = None
@@ -351,11 +406,26 @@ class EmailPreviewTabWidget(QWidget):
         self._clear_items()
 
     def refresh_recipients_from_configs(self):
-        # Called when mappings change
+        # Called when mappings or dialog-saved configs change
         try:
-            self._mappings = self._mapping_service.get_all_mappings()
+            svc = self._stopover_email_service
+            all_cfgs = svc.get_all_configs()
+            self._email_configs = {
+                code: {
+                    "to": list(cfg.recipients or []),
+                    "cc": list(cfg.cc_recipients or []),
+                    "bcc": list(cfg.bcc_recipients or []),
+                }
+                for code, cfg in all_cfgs.items()
+            }
+            # Maintain legacy _mappings from 'to' for any code paths still reading it
+            self._mappings = {code: vals.get("to", []) for code, vals in self._email_configs.items()}
         except Exception:
-            self._mappings = {}
+            self._email_configs = {}
+            try:
+                self._mappings = self._mapping_service.get_all_mappings()
+            except Exception:
+                self._mappings = {}
         self._rebuild_items_async()
 
     # ---------- Internal ----------
@@ -406,12 +476,17 @@ class EmailPreviewTabWidget(QWidget):
         if self.filter_combo.count() <= 1:
             self._rebuild_stopover_filter_combo()
 
-        # Ensure we have latest mappings
+        # Ensure we have latest configs (preferred) and legacy mappings as fallback
         try:
-            if not self._mappings:
-                self._mappings = self._mapping_service.get_all_mappings()
+            if not getattr(self, "_email_configs", None):
+                self.refresh_recipients_from_configs()
         except Exception:
-            self._mappings = {}
+            # Soft-fail: keep legacy behavior
+            try:
+                if not self._mappings:
+                    self._mappings = self._mapping_service.get_all_mappings()
+            except Exception:
+                self._mappings = {}
 
         # Pull current global templates once
         try:
@@ -442,9 +517,13 @@ class EmailPreviewTabWidget(QWidget):
             filtered = list(self._stopovers)
 
         for s in filtered:
-            recipients = self._mappings.get(str(s.code).upper(), [])
-            # Apply overrides per stopover if present, else use template
             code_uc = (s.code or "").upper()
+            # Prefer unified configs for recipients; fallback to legacy mappings
+            if getattr(self, "_email_configs", None) and code_uc in self._email_configs:
+                recipients = list(self._email_configs[code_uc].get("to", []))
+            else:
+                recipients = self._mappings.get(code_uc, [])
+            # Apply overrides per stopover if present, else use template
             ov = overrides.get(code_uc) if isinstance(overrides, dict) else None
             if ov and isinstance(ov, dict):
                 subject = (ov.get("subject") or subject_template).replace("{{stopover_code}}", s.code)
@@ -452,7 +531,6 @@ class EmailPreviewTabWidget(QWidget):
             else:
                 subject = subject_template.replace("{{stopover_code}}", s.code)
                 body = body_template.replace("{{stopover_code}}", s.code)
-            # Mettre à jour self.subject/self.body pour l'item créé
 
             # Use page size if available on stopover; fallback to A4
             page_mm = self._extract_page_size_mm(s)
@@ -545,11 +623,18 @@ class EmailPreviewTabWidget(QWidget):
                 return
             service = self._email_service
             attachment = self._build_attachment_for_stopover(stopover)
+            # Fetch CC/BCC from unified config
+            code_uc = (stopover.code or "").upper()
+            cfg = self._stopover_email_service.get_config(code_uc)
+            cc_list = list(getattr(cfg, "cc_recipients", []) or [])
+            bcc_list = list(getattr(cfg, "bcc_recipients", []) or [])
             ok = service.send_email(
                 to_emails=recipients,
                 subject=subject,
                 body=body,
-                attachment_path=attachment
+                attachment_path=attachment,
+                cc_emails=cc_list,
+                bcc_emails=bcc_list,
             )
             # Feedback message requested for 'envoyer individuellement'
             if ok:
@@ -590,11 +675,12 @@ class EmailPreviewTabWidget(QWidget):
 
         for s in self._apply_filters(self._stopovers):
             try:
-                recipients = self._mappings.get(str(s.code).upper(), [])
+                code_uc = (s.code or "").upper()
+                cfg = self._stopover_email_service.get_config(code_uc)
+                recipients = list(cfg.recipients or [])
                 if not recipients and ignore_empty:
                     skipped_no_rec += 1
                     continue
-                code_uc = (s.code or "").upper()
                 ov = overrides.get(code_uc) if isinstance(overrides, dict) else None
                 if ov and isinstance(ov, dict):
                     subject = (ov.get("subject") or subject_template).replace("{{stopover_code}}", s.code)
@@ -607,7 +693,9 @@ class EmailPreviewTabWidget(QWidget):
                     to_emails=recipients,
                     subject=subject,
                     body=body,
-                    attachment_path=attachment
+                    attachment_path=attachment,
+                    cc_emails=list(cfg.cc_recipients or []),
+                    bcc_emails=list(cfg.bcc_recipients or []),
                 )
                 sent_count += 1
             except Exception as e:

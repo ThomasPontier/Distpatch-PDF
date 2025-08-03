@@ -4,7 +4,8 @@ from typing import Optional, Callable, Set, List, Dict
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QMessageBox, QInputDialog, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QStyle
+    QPushButton, QMessageBox, QInputDialog, QLineEdit, QTableWidget, QTableWidgetItem, QHeaderView, QStyle,
+    QDialog, QFormLayout
 )
 from PySide6.QtGui import QIcon
 
@@ -24,7 +25,9 @@ class MappingTabWidget(QWidget):
     def __init__(self, on_mappings_change: Optional[Callable[[], None]] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.on_mappings_change = on_mappings_change
-        self.mapping_service = MappingService()
+        # Single source of truth: read via StopoverEmailService to ensure parity with dialog and preview
+        from services.stopover_email_service import StopoverEmailService
+        self._email_service = StopoverEmailService()
 
         self._found_codes: Set[str] = set()
 
@@ -36,14 +39,15 @@ class MappingTabWidget(QWidget):
         root.setSpacing(8)
 
         # Unique table view required by spec:
-        # Columns: Stopover Code | Last Sent | Emails | Status (Found in PDF)
+        # Columns: Stopover Code | Last Sent | Emails | Cc/Bcc | Status (Found in PDF)
         self.table = QTableWidget(self)
-        self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Code escale", "Dernier envoi", "Emails", "Statut"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Code escale", "Dernier envoi", "Emails", "CC/CCI", "Statut"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(self.table.EditTrigger.NoEditTriggers)
         # Enable interactive sorting by clicking on headers
@@ -54,10 +58,9 @@ class MappingTabWidget(QWidget):
         # Actions
         actions = QHBoxLayout()
 
-        self.add_btn = QPushButton("Ajouter/Mettre à jour", self)
-        self.add_btn.setToolTip("Ajouter une escale ou mettre à jour les emails d’une existante")
+        self.add_btn = QPushButton("Ajouter", self)
+        self.add_btn.setToolTip("Ajouter une escale et configurer ses emails (À/CC/CCI)")
         try:
-            # Remove icon as per spec
             self.add_btn.setIcon(QIcon())
             self.add_btn.setIconSize(QSize(20, 20))
         except Exception:
@@ -73,6 +76,12 @@ class MappingTabWidget(QWidget):
         except Exception:
             pass
         self.edit_btn.clicked.connect(self._edit_selected_mapping)
+        # Use the dedicated recipients editor dialog for both Ajouter and Modifier
+        try:
+            from ui.components.recipient_editor_dialog import RecipientEditorDialog
+            self._RecipientEditorDialog = RecipientEditorDialog
+        except Exception:
+            self._RecipientEditorDialog = None
 
         self.remove_btn = QPushButton("Supprimer la sélection", self)
         self.remove_btn.setToolTip("Supprimer la correspondance pour l’escale sélectionnée")
@@ -101,6 +110,12 @@ class MappingTabWidget(QWidget):
 
         # UX: double-click a row to edit its emails
         self.table.itemDoubleClicked.connect(lambda _: self._edit_selected_mapping())
+        # Live refresh when config changes anywhere
+        try:
+            from services.config_manager import get_config_manager
+            get_config_manager().on_mappings_changed(lambda _: self.load_mappings())
+        except Exception:
+            pass
 
     # -------- Public API (parity) --------
 
@@ -108,29 +123,37 @@ class MappingTabWidget(QWidget):
         """Reload the table with stopover mappings + last sent + found status."""
         try:
             # Data sources
-            mappings: Dict[str, List[str]] = self.mapping_service.get_all_mappings()  # {CODE: [emails]}
-            try:
-                from services.stopover_email_service import StopoverEmailService
-                ses = StopoverEmailService()
-                last_sent_map: Dict[str, str] = ses._manager.get_last_sent()  # raw dict access from manager
-            except Exception:
-                last_sent_map = {}
+            # Unify with StopoverEmailService so edits from the email dialog are always reflected here.
+            from services.stopover_email_service import StopoverEmailService
+            ses = StopoverEmailService()
+            all_cfgs = ses.get_all_configs()  # { CODE: StopoverEmailConfig }
+            last_sent_map: Dict[str, str] = ses._manager.get_last_sent()  # raw dict access from manager
 
-            # Merge codes from mappings and found in current PDF
-            all_codes = sorted(set((self._found_codes or set())) | set(mappings.keys()))
+            # Merge codes from unified configs (may include codes not in legacy mappings) and found in current PDF
+            all_codes = sorted(set((self._found_codes or set())) | set(all_cfgs.keys()))
 
             # Build table
             self.table.setRowCount(len(all_codes))
             for row, code in enumerate(all_codes):
-                emails = mappings.get(code, [])
-                emails_str = ", ".join(emails) if emails else ""
+                cfg = all_cfgs.get(code) or all_cfgs.get(str(code).upper())
+                to_list = list((cfg.recipients if cfg else []) or [])
+                cc_list = list((cfg.cc_recipients if cfg else []) or [])
+                bcc_list = list((cfg.bcc_recipients if cfg else []) or [])
+                emails_str = ", ".join(to_list) if to_list else ""
+                ccbcc_parts = []
+                if cc_list:
+                    ccbcc_parts.append(f"CC: {', '.join(cc_list)}")
+                if bcc_list:
+                    ccbcc_parts.append(f"CCI: {', '.join(bcc_list)}")
+                ccbcc_str = " | ".join(ccbcc_parts)
                 last_raw = last_sent_map.get(code) or last_sent_map.get(str(code).upper()) or ""
                 status = "✓ Présente" if code in (self._found_codes or set()) else "○ Absente"
 
                 self.table.setItem(row, 0, QTableWidgetItem(code))
                 self.table.setItem(row, 1, QTableWidgetItem(last_raw))
                 self.table.setItem(row, 2, QTableWidgetItem(emails_str))
-                self.table.setItem(row, 3, QTableWidgetItem(status))
+                self.table.setItem(row, 3, QTableWidgetItem(ccbcc_str))
+                self.table.setItem(row, 4, QTableWidgetItem(status))
 
             # After populating, preserve current sort or default to code asc
             header = self.table.horizontalHeader()
@@ -168,93 +191,91 @@ class MappingTabWidget(QWidget):
 
     # -------- Editing actions --------
 
-    def _prompt_code_and_emails(self, initial_code: str = "", initial_emails: str = "") -> Optional[tuple]:
-        # Ask for stopover code
-        code, ok = QInputDialog.getText(self, "Code d’escale", "Saisir le code d’escale (ex. : ABJ) :", QLineEdit.Normal, initial_code)
+    def _add_or_update_mapping(self):
+        """Ajouter une escale et configurer ses emails (À/CC/CCI) via le même dialogue factorisé que 'Modifier'."""
+        # Demander le code d’escale
+        code, ok = QInputDialog.getText(
+            self,
+            "Code d’escale",
+            "Saisir le code d’escale (ex. : ABJ) :",
+            QLineEdit.Normal,
+            ""
+        )
         if not ok:
-            return None
+            return
         code = str(code).strip().upper()
         if not code:
             QMessageBox.information(self, "Info", "Le code d’escale est requis.")
-            return None
-        # Ask for emails
-        emails_str, ok2 = QInputDialog.getText(
-            self,
-            "Adresses email",
-            "Saisir les adresses email séparées par des virgules ou des points-virgules :",
-            QLineEdit.Normal,
-            initial_emails
-        )
-        if not ok2:
-            return None
-        # Normalize separators and strip
-        raw = emails_str.replace(";", ",")
-        emails = [e.strip() for e in raw.split(",") if e.strip()]
-        return (code, emails)
-
-    def _add_or_update_mapping(self):
-        """Add a new stopover or update emails for an existing one."""
-        # Prefill code with first selected item if any
-        initial_code = ""
-        # Get selected row code from table if any
-        selected = self.table.currentRow()
-        if selected is not None and selected >= 0:
-            code_item = self.table.item(selected, 0)
-            if code_item:
-                initial_code = code_item.text().strip().upper()
-
-        result = self._prompt_code_and_emails(initial_code=initial_code, initial_emails="")
-        if not result:
             return
-        code, emails = result
+
+        # Charger la config existante (ou défaut)
         try:
-            # For add/update, set complete list via MappingService/ConfigManager
-            # Use service facade to ensure normalization and signals
-            from services.config_manager import get_config_manager
-            mgr = get_config_manager()
-            mgr.set_mapping(code, emails)
-            mgr.add_stopover(code)  # ensure enabled/visible
+            cfg = self._email_service.get_config(code)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Échec de lecture de la configuration : {str(e)}")
+            return
+
+        # Ouvrir exactement le même éditeur de destinataires (composant factorisé)
+        try:
+            if not self._RecipientEditorDialog:
+                from ui.components.recipient_editor_dialog import RecipientEditorDialog
+                self._RecipientEditorDialog = RecipientEditorDialog
+            accepted, to_vals, cc_vals, bcc_vals = self._RecipientEditorDialog.open(
+                self,
+                code,
+                list(cfg.recipients or []),
+                list(cfg.cc_recipients or []),
+                list(cfg.bcc_recipients or []),
+            )
+            if not accepted:
+                return
+            cfg.recipients = list(to_vals or [])
+            cfg.cc_recipients = list(cc_vals or [])
+            cfg.bcc_recipients = list(bcc_vals or [])
+            cfg.is_enabled = True
+            self._email_service.save_config(cfg)
             self.load_mappings()
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Échec de l’ajout/mise à jour : {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de l’ajout : {str(e)}")
 
     def _edit_selected_mapping(self):
-        """Edit emails for the selected mapping row without asking for the code again."""
+        """Modifier les emails d’une escale via le même dialogue factorisé (RecipientEditorDialog)."""
         row = self.table.currentRow()
         if row is None or row < 0:
             QMessageBox.information(self, "Info", "Veuillez sélectionner une correspondance à modifier.")
             return
         code_item = self.table.item(row, 0)
-        emails_item = self.table.item(row, 2)
         code = code_item.text().strip().upper() if code_item else ""
-        current = emails_item.text().strip() if emails_item else ""
-        # Only prompt for emails; keep the selected code unchanged
-        emails_str, ok = QInputDialog.getText(
-            self,
-            "Modifier les adresses email",
-            f"Saisir les adresses email pour {code} (séparées par des virgules ou des points-virgules) :",
-            QLineEdit.Normal,
-            current
-        )
-        if not ok:
+        if not code:
+            QMessageBox.information(self, "Info", "Code d’escale introuvable.")
             return
-        raw = emails_str.replace(";", ",")
-        emails = [e.strip() for e in raw.split(",") if e.strip()]
         try:
-            from services.config_manager import get_config_manager
-            mgr = get_config_manager()
-            mgr.set_mapping(code, emails)
-            mgr.add_stopover(code)
+            cfg = self._email_service.get_config(code)
+            from ui.components.recipient_editor_dialog import RecipientEditorDialog
+            accepted, to_vals, cc_vals, bcc_vals = RecipientEditorDialog.open(
+                self,
+                code,
+                list(cfg.recipients or []),
+                list(cfg.cc_recipients or []),
+                list(cfg.bcc_recipients or []),
+            )
+            if not accepted:
+                return
+            cfg.recipients = list(to_vals or [])
+            cfg.cc_recipients = list(cc_vals or [])
+            cfg.bcc_recipients = list(bcc_vals or [])
+            cfg.is_enabled = True
+            self._email_service.save_config(cfg)
             self.load_mappings()
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Échec de la modification : {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de la modification : {str(e)}")
 
     def _remove_selected_mapping(self):
-        """Remove mapping for the selected stopover."""
+        """Remove mapping for the selected stopover (clears To/Cc/Bcc)."""
         row = self.table.currentRow()
         if row is None or row < 0:
             QMessageBox.information(self, "Info", "Veuillez sélectionner une correspondance à supprimer.")
@@ -264,18 +285,22 @@ class MappingTabWidget(QWidget):
         confirm = QMessageBox.question(
             self,
             "Confirmer la suppression",
-            f"Supprimer toutes les correspondances email pour {code} ?",
+            f"Supprimer toutes les correspondances email pour {code} ?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
         if confirm != QMessageBox.Yes:
             return
         try:
-            from services.config_manager import get_config_manager
-            mgr = get_config_manager()
-            mgr.remove_mapping(code)
+            # Clear all recipients via StopoverEmailService for a single source of truth
+            cfg = self._email_service.get_config(code)
+            cfg.recipients = []
+            cfg.cc_recipients = []
+            cfg.bcc_recipients = []
+            self._email_service.save_config(cfg)
             self.load_mappings()
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
-            QMessageBox.critical(self, "Erreur", f"Échec de la suppression : {str(e)}")
+            QMessageBox.critical(self, "Erreur", f"Échec de la suppression : {str(e)}")
+
