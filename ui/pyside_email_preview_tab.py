@@ -92,15 +92,16 @@ class StopoverEmailPreviewItem(QWidget):
                 # Use the tab's shared StopoverEmailService instance to keep config unified
                 dlg = StopoverEmailSettingsDialog(tab_widget, self.stopover.code, tab_widget._stopover_email_service)
                 if dlg.exec():
-                    # After saving, refresh mappings so recipients update immediately
+                    # After saving, refresh configs and coalesced-rebuild preview so recipients update immediately
                     try:
                         tab_widget.refresh_recipients_from_configs()
                     except Exception:
-                        # As a fallback, rebuild items directly
-                        try:
-                            tab_widget._rebuild_items_async()
-                        except Exception:
-                            pass
+                        pass
+                    # Always schedule a coalesced rebuild to ensure UI reflects changes
+                    try:
+                        tab_widget._rebuild_items_async()
+                    except Exception:
+                        pass
             except Exception as e:
                 # Non-blocking error reporting to console
                 print(f"[StopoverEmailPreviewItem] Failed to open email settings: {e}")
@@ -217,12 +218,15 @@ class StopoverEmailPreviewItem(QWidget):
     def _auto_persist_body(self):
         """Persist the current edited body for this stopover immediately."""
         try:
-            cm = get_config_manager()
-            data = cm.get_value(OVERRIDES_KEY) or {}
-            code = (self.stopover.code or "").upper()
-            # Always persist current subject+body. Subject comes from computed self.subject (template or override)
-            data[code] = {"subject": self.subject, "body": self.body_view.toPlainText()}
-            cm.set_value(OVERRIDES_KEY, data)
+            # Persist per-stopover override using StopoverEmailService config,
+            # since ConfigManager no longer exposes generic get/set for arbitrary keys.
+            code_uc = (self.stopover.code or "").upper()
+            svc = StopoverEmailService()
+            cfg = svc.get_config(code_uc)
+            # Keep current subject/body text from the item
+            cfg.subject_template = self.subject
+            cfg.body_template = self.body_view.toPlainText()
+            svc.save_config(cfg)
         except Exception as e:
             # Non bloquant
             print(f"[StopoverEmailPreviewItem] auto persist failed: {e}")
@@ -426,7 +430,8 @@ class EmailPreviewTabWidget(QWidget):
                 self._mappings = self._mapping_service.get_all_mappings()
             except Exception:
                 self._mappings = {}
-        self._rebuild_items_async()
+        # Intentionally do not trigger a refresh here; keep this method as a pure state update.
+        # Callers (set_stopovers/set_pdf_path/_persist_templates_from_ui) already request refresh.
 
     # ---------- Internal ----------
 
@@ -435,13 +440,8 @@ class EmailPreviewTabWidget(QWidget):
         subject_template = self.template_subject.toPlainText().strip() or "Rapport d’escale – {{stopover_code}}"
         body_template = self.template_body.toPlainText().strip() or self._email_service._get_default_template()
         try:
-            # If the template content has changed versus last applied, clear overrides
+            # Persist global templates via ConfigManager (no generic KV anymore)
             tpl_current = (subject_template, body_template)
-            if self._last_template and self._last_template != tpl_current:
-                try:
-                    get_config_manager().set_value(OVERRIDES_KEY, {})  # destroy manual overrides
-                except Exception:
-                    pass
             get_config_manager().set_templates(subject_template, body_template)
             self._last_template = tpl_current
         except Exception as e:
@@ -452,12 +452,23 @@ class EmailPreviewTabWidget(QWidget):
         self._rebuild_items_async()
 
     def _clear_items(self):
+        # Preserve current scroll position to avoid jumping after rebuilds
+        try:
+            scroll_pos = self.scroll.verticalScrollBar().value() if hasattr(self, "scroll") else None
+        except Exception:
+            scroll_pos = None
         while self.items_layout.count():
             item = self.items_layout.takeAt(0)
             w = item.widget()
             if w:
                 w.setParent(None)
                 w.deleteLater()
+        # Restore scroll position if possible
+        try:
+            if scroll_pos is not None and hasattr(self, "scroll"):
+                QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(scroll_pos))
+        except Exception:
+            pass
 
     def _rebuild_items_async(self):
         # Skip during initial construction to prevent empty-first render
@@ -497,9 +508,16 @@ class EmailPreviewTabWidget(QWidget):
             subject_template = "Rapport d’escale – {{stopover_code}}"
             body_template = self._email_service._get_default_template()
 
-        # Load overrides map once
+        # Load per-stopover overrides from unified StopoverEmailService configs
+        overrides: Dict[str, Dict[str, str]] = {}
         try:
-            overrides = get_config_manager().get_value(OVERRIDES_KEY) or {}
+            svc = self._stopover_email_service
+            # Build a simple override dict view based on service configs
+            for code, cfg in (svc.get_all_configs() or {}).items():
+                overrides[str(code).upper()] = {
+                    "subject": getattr(cfg, "subject_template", "") or "",
+                    "body": getattr(cfg, "body_template", "") or "",
+                }
         except Exception:
             overrides = {}
 

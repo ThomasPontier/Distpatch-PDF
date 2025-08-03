@@ -42,7 +42,7 @@ class RecipientEditorDialog(QDialog):
         self.bcc_edit = QLineEdit(self)
         self.bcc_edit.setPlaceholderText("ex: e@ex.com")
 
-        form.addRow(QLabel("À (To):"), self.to_edit)
+        form.addRow(QLabel("À:"), self.to_edit)
         form.addRow(QLabel("CC:"), self.cc_edit)
         form.addRow(QLabel("CCI:"), self.bcc_edit)
         v.addLayout(form)
