@@ -4,7 +4,8 @@
   "mappings": {},
   "templates": {
     "subject": "Rapport SATISFACTION CLIENT ESCALE - {{stopover_code}}",
-    "body": "Bonsoir,\n\nVoici le Bilan de satisfaction de l'escale {{stopover_code}}.\n\nCordialement,"
+    "body": "Bonsoir,\n\nVoici le Bilan de satisfaction de l'escale {{stopover_code}}.\n \nCordialement,\n\nDOS",
+    "filename_pattern": "Enquête - SATISFACTION - CLIENT - {{stopover_code}}"
   },
   "last_sent": {}
 }
