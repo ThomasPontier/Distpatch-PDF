@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "stopovers": [
+    "ABJ",
+    "NTE"
+  ],
+  "mappings": {
+    "ABJ": [],
+    "NTE": [
+      "tpontier@corsair.fr"
+    ]
+  },
+  "templates": {
+    "subject": "Rapport SATISFACTION CLIENT ESCALE - {{stopover_code}}",
+    "body": "Bonsoir,\n\nVoici le Bilan de satisfaction de l'escale {{stopover_code}}.\n \nCordialement,\n\nDOS",
+    "filename_pattern": "Enquête - SATISFACTION - CLIENT - {{stopover_code}}"
+  },
+  "last_sent": {
+    "ABJ": "2025-08-04T12:04:53.088722Z",
+    "NTE": "2025-08-04T12:04:53.162819Z"
+  }
+}

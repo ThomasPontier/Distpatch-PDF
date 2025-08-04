@@ -147,10 +147,42 @@ class MappingTabWidget(QWidget):
                     ccbcc_parts.append(f"CCI: {', '.join(bcc_list)}")
                 ccbcc_str = " | ".join(ccbcc_parts)
                 last_raw = last_sent_map.get(code) or last_sent_map.get(str(code).upper()) or ""
+
+                # Format 'Dernier envoi' in local France time (UTC+2) as 'YYYY-MM-DD HH:MM'
+                def _format_last_sent(iso_s: str) -> str:
+                    if not iso_s:
+                        return ""
+                    try:
+                        from datetime import datetime, timedelta, timezone
+                        s = iso_s.strip()
+                        # Accept both with/without trailing 'Z' and with fractional seconds
+                        if s.endswith("Z"):
+                            s = s[:-1]
+                            tzinfo = timezone.utc
+                        else:
+                            tzinfo = timezone.utc
+                        # Try multiple patterns
+                        dt = None
+                        for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+                            try:
+                                dt = datetime.strptime(s, fmt)
+                                break
+                            except Exception:
+                                continue
+                        if dt is None:
+                            return iso_s  # fallback: raw
+                        dt = dt.replace(tzinfo=tzinfo)
+                        # Convert to France time (fixed offset +2h as requested)
+                        dt_fr = dt.astimezone(timezone(timedelta(hours=2)))
+                        return dt_fr.strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        return iso_s
+
+                last_display = _format_last_sent(last_raw)
                 status = "✓ Présente" if code in (self._found_codes or set()) else "○ Absente"
 
                 self.table.setItem(row, 0, QTableWidgetItem(code))
-                self.table.setItem(row, 1, QTableWidgetItem(last_raw))
+                self.table.setItem(row, 1, QTableWidgetItem(last_display))
                 self.table.setItem(row, 2, QTableWidgetItem(emails_str))
                 self.table.setItem(row, 3, QTableWidgetItem(ccbcc_str))
                 self.table.setItem(row, 4, QTableWidgetItem(status))
@@ -275,7 +307,7 @@ class MappingTabWidget(QWidget):
             QMessageBox.critical(self, "Erreur", f"Échec de la modification : {str(e)}")
 
     def _remove_selected_mapping(self):
-        """Remove mapping for the selected stopover (clears To/Cc/Bcc)."""
+        """Remove mapping for the selected stopover (clears To/Cc/Bcc and 'Dernier envoi')."""
         row = self.table.currentRow()
         if row is None or row < 0:
             QMessageBox.information(self, "Info", "Veuillez sélectionner une correspondance à supprimer.")
@@ -292,15 +324,32 @@ class MappingTabWidget(QWidget):
         if confirm != QMessageBox.Yes:
             return
         try:
-            # Clear all recipients via StopoverEmailService for a single source of truth
+            # Clear all recipients and last sent, then remove the stopover entirely
             cfg = self._email_service.get_config(code)
             cfg.recipients = []
             cfg.cc_recipients = []
             cfg.bcc_recipients = []
+            cfg.last_sent_at = None
             self._email_service.save_config(cfg)
+
+            # Remove mapping + stopover + last_sent from unified config
+            try:
+                from services.stopover_email_service import StopoverEmailService
+                StopoverEmailService().delete_config(code)
+            except Exception:
+                # Fallback direct removal to be extra safe
+                try:
+                    from services.config_manager import get_config_manager
+                    mgr = get_config_manager()
+                    mgr.remove_mapping(code)
+                    mgr.clear_last_sent_normalized(code)
+                    mgr.remove_stopover(code)
+                except Exception:
+                    pass
+
+            # Refresh UI so the row disappears and 'Dernier envoi' is cleared
             self.load_mappings()
             if self.on_mappings_change:
                 self.on_mappings_change()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Échec de la suppression : {str(e)}")
-

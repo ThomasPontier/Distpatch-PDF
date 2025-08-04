@@ -713,6 +713,25 @@ class EmailPreviewTabWidget(QWidget):
             )
             # Feedback message requested for 'envoyer individuellement'
             if ok:
+                try:
+                    # Persist last_sent immediately so MappingTab reflects the change
+                    self._stopover_email_service.set_last_sent_now(code_uc)
+                    # Force MappingTab immediate refresh if present in the main window
+                    try:
+                        w = self.parent()
+                        mw = None
+                        while w is not None:
+                            # The main window holds mapping_tab as an attribute
+                            if hasattr(w, "mapping_tab") and hasattr(w.mapping_tab, "load_mappings"):
+                                mw = w
+                                break
+                            w = w.parent()
+                        if mw is not None:
+                            mw.mapping_tab.load_mappings()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
                 QMessageBox.information(self, "Envoyé", f"Email envoyé pour {stopover.code}.")
             else:
                 QMessageBox.critical(self, "Erreur", f"Echec d'envoi pour {stopover.code}.")
@@ -764,7 +783,7 @@ class EmailPreviewTabWidget(QWidget):
                     subject = subject_template.replace("{{stopover_code}}", s.code)
                     body = body_template.replace("{{stopover_code}}", s.code)
                 attachment = self._build_attachment_for_stopover(s)
-                self._email_service.send_email(
+                ok = self._email_service.send_email(
                     to_emails=recipients,
                     subject=subject,
                     body=body,
@@ -772,7 +791,26 @@ class EmailPreviewTabWidget(QWidget):
                     cc_emails=list(cfg.cc_recipients or []),
                     bcc_emails=list(cfg.bcc_recipients or []),
                 )
-                sent_count += 1
+                if ok:
+                    try:
+                        # Persist last_sent so MappingTab's "Dernier envoi" updates
+                        self._stopover_email_service.set_last_sent_now(code_uc)
+                        # Force MappingTab immediate refresh if available
+                        try:
+                            w = self.parent()
+                            mw = None
+                            while w is not None:
+                                if hasattr(w, "mapping_tab") and hasattr(w.mapping_tab, "load_mappings"):
+                                    mw = w
+                                    break
+                                w = w.parent()
+                            if mw is not None:
+                                mw.mapping_tab.load_mappings()
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass
+                    sent_count += 1
             except Exception as e:
                 print(f"[EmailPreviewTabWidget] send all failed for {s.code}: {e}")
 

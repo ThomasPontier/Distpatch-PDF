@@ -6,23 +6,62 @@ import sys
 import os
 import shutil
 import logging
+import stat
+import time
 from typing import NoReturn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def _on_rm_error(func, path, exc_info):
+    """
+    Error handler for shutil.rmtree.
+    If the error is due to a read-only file, make it writable and retry.
+    """
+    try:
+        os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+    except Exception:
+        pass
+    try:
+        func(path)
+    except Exception:
+        logger.debug("Retry failed removing: %s", path, exc_info=True)
+
+
+def _rmtree_robust(path: str, attempts: int = 5, delay: float = 0.4) -> None:
+    """
+    Robustly remove a directory tree on Windows by clearing attributes and retrying.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            shutil.rmtree(path, onerror=_on_rm_error)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as e:
+            logger.warning("PermissionError removing %s (attempt %d/%d): %s", path, attempt, attempts, e)
+        except OSError as e:
+            logger.warning("OSError removing %s (attempt %d/%d): %s", path, attempt, attempts, e)
+        time.sleep(delay)
+    shutil.rmtree(path, onerror=_on_rm_error)
+
+
 def remove_path(path: str) -> None:
-    """Safely remove a file or directory if it exists, logging actions and errors."""
+    """Safely remove a file or directory if it exists, logging actions and errors with robust handling on Windows."""
     if os.path.isdir(path):
         logger.info("Removing directory: %s", path)
         try:
-            shutil.rmtree(path, ignore_errors=False)
+            _rmtree_robust(path)
         except Exception:
             logger.exception("Failed to remove directory: %s", path)
     elif os.path.isfile(path):
         logger.info("Removing file: %s", path)
         try:
+            try:
+                os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
             os.remove(path)
         except Exception:
             logger.exception("Failed to remove file: %s", path)
@@ -30,6 +69,9 @@ def remove_path(path: str) -> None:
 def main() -> None:
     """Build the application using PyInstaller."""
     logger.info("Building Dispatch-SATISFACTION...")
+    # Pre-clean build/ and dist/ to avoid leftover locks from previous runs
+    remove_path("build")
+    remove_path("dist")
 
     # Avoid manually deleting build/ and dist/ to prevent Windows lock errors.
     # Delegate cleaning to PyInstaller with --clean and explicit paths.
