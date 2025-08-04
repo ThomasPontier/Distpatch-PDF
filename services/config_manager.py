@@ -59,7 +59,8 @@ class ConfigManager:
         """Get the appropriate config path based on execution context."""
         if getattr(sys, 'frozen', False):
             # Running as compiled executable - use APPDATA
-            appdata_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'Distpatch-PDF')
+            # Store config under new application folder name
+            appdata_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'Dispatch-SATISFACTION')
             return os.path.join(appdata_dir, 'config', 'app_config.json')
         else:
             # Running as script - use local config directory
@@ -117,6 +118,7 @@ class ConfigManager:
             "templates": {
                 "subject": "",
                 "body": "",
+                "filename_pattern": ""
             },
             "last_sent": {},  # stopover: ISO8601 str
         }
@@ -219,12 +221,19 @@ class ConfigManager:
         templates = cfg.get("templates", {})
         subject = ""
         body = ""
+        filename_pattern = ""
         if isinstance(templates, dict):
             sub = templates.get("subject", "")
             bod = templates.get("body", "")
+            fnp = templates.get("filename_pattern", "")
             subject = str(sub) if isinstance(sub, (str, int)) else ""
             body = str(bod) if isinstance(bod, (str, int)) else ""
-        sanitized["templates"] = {"subject": subject, "body": body}
+            filename_pattern = str(fnp) if isinstance(fnp, (str, int)) else ""
+        sanitized["templates"] = {
+            "subject": subject,
+            "body": body,
+            "filename_pattern": filename_pattern
+        }
 
         # last_sent
         last_sent = cfg.get("last_sent", {})
@@ -405,7 +414,20 @@ class ConfigManager:
     def get_templates(self) -> Dict[str, str]:
         with self._lock:
             t = self._config.get("templates", {}) or {}
-            return {"subject": t.get("subject", ""), "body": t.get("body", "")}
+            return {
+                "subject": t.get("subject", ""),
+                "body": t.get("body", ""),
+                "filename_pattern": t.get("filename_pattern", "")
+            }
+        
+    def set_filename_pattern(self, pattern: str) -> None:
+        """Persist the global filename pattern in templates."""
+        with self._lock:
+            t = self._config.get("templates", {}) or {}
+            t["filename_pattern"] = str(pattern)
+            self._config["templates"] = t
+            self._save()
+        self._emit_templates()
 
     def get_last_sent(self) -> Dict[str, str]:
         with self._lock:

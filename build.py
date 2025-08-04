@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build script for creating the Distpatch-PDF executable."""
+"""Build script for creating the Dispatch-SATISFACTION executable."""
 
 import subprocess
 import sys
@@ -29,12 +29,10 @@ def remove_path(path: str) -> None:
 
 def main() -> None:
     """Build the application using PyInstaller."""
-    logger.info("Building Distpatch-PDF...")
+    logger.info("Building Dispatch-SATISFACTION...")
 
-    # Clean previous outputs to avoid stale artifacts
-    remove_path("build")
-    remove_path("dist")
-
+    # Avoid manually deleting build/ and dist/ to prevent Windows lock errors.
+    # Delegate cleaning to PyInstaller with --clean and explicit paths.
     # Check if PyInstaller is installed (do not auto-install)
     try:
         import PyInstaller  # type: ignore  # noqa: F401
@@ -44,15 +42,18 @@ def main() -> None:
         )
         sys.exit(1)
 
-    # Run PyInstaller with our spec file
+    # Run PyInstaller with our spec file.
+    # Use explicit work/dist paths so PyInstaller manages its own cleanup safely.
     try:
         subprocess.check_call([
             sys.executable, "-m", "PyInstaller",
             "--clean",
+            "--workpath", "build",
+            "--distpath", "dist",
             "distpatch_pdf.spec"
         ])
         logger.info("Build completed successfully!")
-        logger.info("Executable location: dist/Distpatch-PDF.exe")
+        logger.info("Executable location: dist/Dispatch-SATISFACTION.exe")
     except subprocess.CalledProcessError as e:
         logger.exception("Build failed with error: %s", e)
         sys.exit(1)

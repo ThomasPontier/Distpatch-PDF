@@ -53,7 +53,7 @@ class MainWindowQt(QMainWindow):
 
     def _setup_window(self):
         cfg = self.config_service.get_window_config()
-        self.setWindowTitle("Analyseur d’escales PDF")
+        self.setWindowTitle("Dispatch-SATISFACTION — Analyseur d’escales PDF")
         try:
             icon_path = resource_path("assets/app.ico")
             self.setWindowIcon(QIcon(icon_path))
@@ -397,5 +397,10 @@ def run_app():
         pass
 
     win = MainWindowQt()
-    win.show()
+    # Start maximized as requested (keeps window borders and taskbar visible)
+    try:
+        win.showMaximized()
+    except Exception:
+        # Fallback to normal show if maximizing fails for any reason
+        win.show()
     sys.exit(app.exec())

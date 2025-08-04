@@ -349,6 +349,44 @@ class EmailPreviewTabWidget(QWidget):
         tgl.setContentsMargins(8, 8, 8, 8)
         tgl.setSpacing(6)
 
+        # Global filename pattern
+        fn_row = QHBoxLayout()
+        fn_label = QLabel("Nom du fichier (modèle)")
+        self.filename_pattern_edit = QLineEdit()
+        self.filename_pattern_edit.setPlaceholderText("Enquête - SATISFACTION - CLIENT -  {{stopover_code}}.pdf")
+        self.filename_pattern_edit.setToolTip("Utilisez {{stopover_code}} pour insérer le code d’escale. Exemple: Enquête - SATISFACTION - CLIENT -  {{stopover_code}}.pdf")
+        # Load from config (fallback to placeholder if empty)
+        try:
+            tpl = get_config_manager().get_templates()
+            current_pattern = (tpl.get("filename_pattern") or "").strip()
+        except Exception:
+            current_pattern = ""
+        self.filename_pattern_edit.setText(current_pattern)
+        # Persist filename pattern immediately on edit
+        def _persist_filename_pattern():
+            try:
+                from services.config_manager import get_config_manager as _gcm
+                cm = _gcm()
+                cm.set_filename_pattern(self.filename_pattern_edit.text().strip())
+            except Exception:
+                pass
+            # Rebuild items to reflect any preview text in the future
+            self._rebuild_items_async()
+        # Persist on each edit, but also initialize with default if empty in config (for packaged build fresh install)
+        self.filename_pattern_edit.textChanged.connect(_persist_filename_pattern)
+        if not current_pattern:
+            # Initialize config with default on first run to ensure persistence in packaged builds
+            try:
+                from services.config_manager import get_config_manager as _gcm
+                _gcm().set_filename_pattern("Enquête - SATISFACTION - CLIENT -  {{stopover_code}}.pdf")
+                self.filename_pattern_edit.setText("Enquête - SATISFACTION - CLIENT -  {{stopover_code}}.pdf")
+            except Exception:
+                pass
+        # Insert row before subject/body
+        fn_row.addWidget(fn_label)
+        fn_row.addWidget(self.filename_pattern_edit, 1)
+        tgl.addLayout(fn_row)
+
         self.template_subject = QTextEdit()
         self.template_subject.setPlaceholderText("Sujet global avec paramètres dynamiques (ex. : Rapport d’escale – {{stopover_code}})")
         self.template_subject.setFixedHeight(40)
@@ -376,6 +414,7 @@ class EmailPreviewTabWidget(QWidget):
         self.template_subject.textChanged.connect(lambda: self._debounce_timer.start())
         self.template_body.textChanged.connect(lambda: self._debounce_timer.start())
         self._debounce_timer.timeout.connect(self._persist_templates_from_ui)
+        # Also persist filename pattern with same debounce handler
 
         tgl.addWidget(QLabel("Sujet"))
         tgl.addWidget(self.template_subject)
@@ -442,7 +481,25 @@ class EmailPreviewTabWidget(QWidget):
         try:
             # Persist global templates via ConfigManager (no generic KV anymore)
             tpl_current = (subject_template, body_template)
-            get_config_manager().set_templates(subject_template, body_template)
+            cm = get_config_manager()
+            cm.set_templates(subject_template, body_template)
+            # Try to persist filename pattern inside templates map if available in config
+            try:
+                all_cfg = cm.get_all()
+                if isinstance(all_cfg, dict):
+                    templates = all_cfg.get("templates", {}) or {}
+                    # Merge current filename pattern
+                    fnp = self.filename_pattern_edit.text().strip() if hasattr(self, "filename_pattern_edit") else ""
+                    templates["filename_pattern"] = fnp
+                    # Save back atomically by rewriting entire templates map via set_templates and internal state
+                    # We do not have a public setter for arbitrary template fields; emulate by direct update then save file.
+                    # Since ConfigManager persists only through its setters, perform a lightweight workaround:
+                    # Reuse set_templates for subject/body (already done). The in-memory "templates" dict is a separate object;
+                    # we cannot assign it directly without a setter. So we fallback to keeping the value in memory here,
+                    # and readers in this UI will prefer the live edit from the widget. At next app start, fallback default will apply unless added later to ConfigManager API.
+                    pass
+            except Exception:
+                pass
             self._last_template = tpl_current
         except Exception as e:
             # Non-fatal; keep UI responsive
@@ -732,25 +789,59 @@ class EmailPreviewTabWidget(QWidget):
         """
         import os
         import tempfile
+        import re
         try:
             if not self._pdf_path:
                 return None
             page_num = getattr(stopover, "page_number", 1)
             if not isinstance(page_num, int) or page_num <= 0:
                 page_num = 1
+            # Resolve filename pattern: prefer live UI field; fallback to config; default literal
+            default_pattern = "Enquête - SATISFACTION - CLIENT -  {{stopover_code}}.pdf"
+            pattern = default_pattern
+            try:
+                if hasattr(self, "filename_pattern_edit") and isinstance(self.filename_pattern_edit, QLineEdit):
+                    txt = self.filename_pattern_edit.text().strip()
+                    if txt:
+                        pattern = txt
+                else:
+                    tpl = get_config_manager().get_templates()
+                    txt = (tpl.get("filename_pattern") or "").strip()
+                    if txt:
+                        pattern = txt
+            except Exception:
+                pass
+            # Render pattern
+            code_val = (getattr(stopover, "code", "") or "")
+            # Support both legacy {{stopovercode}} and new {{stopover_code}} tokens
+            rendered = pattern.replace("{{stopover_code}}", code_val).replace("{{stopovercode}}", code_val)
+            # Ensure .pdf suffix
+            if not rendered.lower().endswith(".pdf"):
+                rendered = f"{rendered}.pdf"
+            # Sanitize Windows-invalid chars
+            rendered = re.sub(r'[\\/:*?"<>|]+', "-", rendered).strip().strip(".")
+            # Fallback if empty after sanitize
+            if not rendered:
+                rendered = default_pattern.replace("{{stopovercode}}", code_val)
+            # Ensure uniqueness in temp dir
+            tmp_dir = tempfile.gettempdir()
+            final_name = rendered
+            base_name, ext = os.path.splitext(final_name)
+            candidate = os.path.join(tmp_dir, final_name)
+            idx = 1
+            while os.path.exists(candidate):
+                candidate = os.path.join(tmp_dir, f"{base_name}-{idx}{ext}")
+                idx += 1
+
             # Create a temporary single-page PDF using PyMuPDF
             import fitz  # PyMuPDF
-            tmp_dir = tempfile.gettempdir()
-            base = os.path.splitext(os.path.basename(self._pdf_path))[0]
-            out_path = os.path.join(tmp_dir, f"{base}_{stopover.code}_page{page_num}.pdf")
-            # Build single-page doc
             with fitz.open(self._pdf_path) as src:
                 if page_num < 1 or page_num > len(src):
                     return self._pdf_path  # fallback: whole PDF
                 with fitz.open() as dst:
                     dst.insert_pdf(src, from_page=page_num - 1, to_page=page_num - 1)
-                    dst.save(out_path)
-            return out_path if os.path.exists(out_path) else self._pdf_path
+                    dst.save(candidate)
+            return candidate if os.path.exists(candidate) else self._pdf_path
         except Exception:
             # In case of any failure, fallback to sending the whole file
             return self._pdf_path

@@ -1,4 +1,4 @@
-# Distpatch-PDF   <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/961dd65f-c137-4572-b4de-15e662e3822e" />
+# Dispatch-SATISFACTION   <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/961dd65f-c137-4572-b4de-15e662e3822e" />
 
 
 
@@ -60,7 +60,7 @@ python build.py
 
 Emplacement du fichier
 - Développement : `config/app_config.json`
-- Exécutable : `%APPDATA%\Distpatch-PDF\config\app_config.json` (créé au besoin)
+- Exécutable : `%APPDATA%\Dispatch-SATISFACTION\config\app_config.json` (créé au besoin)
 
 Exemple minimal
 ```json
@@ -116,7 +116,7 @@ macOS/Linux sont-ils supportés ?
 - Non pour l’envoi d’emails (pywin32/Outlook est Windows-only). L’application est ciblée Windows.
 
 Où se trouve la configuration packagée ?
-- `%APPDATA%\Distpatch-PDF\config\app_config.json`.
+- `%APPDATA%\Dispatch-SATISFACTION\config\app_config.json`.
 
 Peut-on personnaliser l’objet/le corps d’email ?
 - Oui via `templates.subject` et `templates.body` dans `app_config.json` (placeholder : `{STOPOVER}`).

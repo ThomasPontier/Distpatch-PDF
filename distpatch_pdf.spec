@@ -33,7 +33,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Distpatch-PDF',
+    name='Dispatch-SATISFACTION',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
