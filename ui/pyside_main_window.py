@@ -55,8 +55,15 @@ class MainWindowQt(QMainWindow):
         cfg = self.config_service.get_window_config()
         self.setWindowTitle("Dispatch-SATISFACTION — Analyseur d’escales PDF")
         try:
-            icon_path = resource_path("assets/app.ico")
-            self.setWindowIcon(QIcon(icon_path))
+            # Use app1 icon for taskbar/window to match executable resources
+            icon_path = resource_path("assets/app1.ico")
+            app_icon = QIcon(icon_path)
+            self.setWindowIcon(app_icon)
+            try:
+                # Also set the QApplication icon for consistency across dialogs/taskbar
+                QApplication.setWindowIcon(app_icon)
+            except Exception:
+                pass
         except Exception:
             pass
 
