@@ -556,8 +556,7 @@ class ConfigManager:
 
 Veuillez trouver en pièce jointe le rapport d’escale pour {{stopover_code}}.
 
-Cordialement,
-Distpatch PDF"""
+Cordialement,"""
         body = t.get("body") or default_body
         return subject, body
 

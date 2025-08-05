@@ -13,12 +13,13 @@ import os
 import sys
 
 from PySide6.QtCore import Qt, QSize, QTimer, Slot
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QLabel, QPushButton,
     QHBoxLayout, QVBoxLayout, QStatusBar, QProgressBar, QTabWidget, QFrame, QSpacerItem,
-    QSizePolicy, QComboBox, QStyle
+    QSizePolicy, QComboBox, QStyle, QToolButton
 )
+from PySide6.QtCore import QUrl
 
 from controllers.app_controller import AppController
 from services.config_service import ConfigService
@@ -56,7 +57,7 @@ class MainWindowQt(QMainWindow):
         self.setWindowTitle("Dispatch-SATISFACTION — Analyseur d’escales PDF")
         try:
             # Use app1 icon for taskbar/window to match executable resources
-            icon_path = resource_path("assets/app1.ico")
+            icon_path = resource_path("assets/app.ico")
             app_icon = QIcon(icon_path)
             self.setWindowIcon(app_icon)
             try:
@@ -199,6 +200,20 @@ class MainWindowQt(QMainWindow):
         self.progress_bar.setFixedWidth(200)
         sb.addPermanentWidget(self.progress_bar)
 
+        # Discreet help button in footer (status bar), text "?" only
+        self._help_btn = QToolButton(self)
+        self._help_btn.setObjectName("FooterHelpBtn")
+        self._help_btn.setAutoRaise(True)
+        self._help_btn.setText("?")
+        self._help_btn.setToolTip("Aide / GitHub")
+        self._help_btn.setFixedSize(24, 24)
+        self._help_btn.setStyleSheet(
+            "QToolButton#FooterHelpBtn{border:1px solid #ccc;background:#f8f8f8;color:#333;border-radius:12px;padding:0}"
+            "QToolButton#FooterHelpBtn:hover{background:#eee}"
+        )
+        self._help_btn.clicked.connect(self._open_help)
+        sb.addPermanentWidget(self._help_btn)
+
     def _setup_controller_callbacks(self):
         self.controller.on_status_update = self._enqueue_status_update
         self.controller.on_progress_start = self._start_progress
@@ -332,6 +347,16 @@ class MainWindowQt(QMainWindow):
     def _open_account_dialog(self):
         # No-op: simplified UX has no separate dialog
         pass
+
+    @Slot()
+    def _open_help(self):
+        url = QUrl("https://github.com/ThomasPontier/Distpatch-PDF/blob/main/README.md")
+        if not QDesktopServices.openUrl(url):
+            try:
+                import webbrowser
+                webbrowser.open(url.toString())
+            except Exception:
+                QMessageBox.warning(self, "Aide", "Impossible d'ouvrir le lien.")
 
     def _refresh_outlook_accounts(self):
         """Populate the Outlook accounts dropdown and update status label."""
