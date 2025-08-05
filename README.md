@@ -1,8 +1,7 @@
-# Dispatch PDF <img width="45" height="45" alt="app1" src="https://github.com/user-attachments/assets/294cc32a-2820-4468-bd5a-a3afb4fdc5c7" />
+# <img width="45" height="45" alt="app1" src="https://github.com/user-attachments/assets/294cc32a-2820-4468-bd5a-a3afb4fdc5c7" /> Dispatch PDF 
 
 Application Windows pour analyser des PDF bagages, détecter des pages « escale », prévisualiser, mapper les destinataires et préparer l’envoi d’emails.
 
-Dernière mise à jour : 2025-08-04
 
 ## Sommaire
 - [Aperçu](#aperçu)
@@ -29,12 +28,12 @@ Distpatch PDF facilite le contrôle et la diffusion d’extraits PDF par escale.
 
 
 ## Installation
-# Téléchargez et lancez le fichier executable :
+### Téléchargez et lancez le fichier executable :
 
 
 
 
-# Ou depuis le code source :
+### Ou depuis le code source :
 Créer l’environnement et installer les dépendances
 ```bash
 python -m venv .venv
