@@ -60,10 +60,9 @@ En mode packagé, le dossier de configuration est stocké dans %APPDATA%/Roaming
 Flux rapide
 1) Ouvrir l’application (ou `python main.py`)
 2) Sélectionner un PDF
-3) Cliquer « Analyser »
-4) Parcourir la liste des escales détectées
-5) Prévisualiser la page correspondante
-6) Préparer l’envoi d’emails (à partir du mapping et des templates)
+3) Parcourir la liste des escales détectées
+4) Prévisualiser la page correspondante
+5) Préparer l’envoi d’emails (à partir du mapping et des templates)
 
 Règles de détection (par défaut)
 - Page contenant un motif de type « AAA-Bilan » (AAA = 3 lettres majuscules)
