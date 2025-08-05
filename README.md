@@ -1,4 +1,4 @@
-# Distpatch PDF <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/961dd65f-c137-4572-b4de-15e662e3822e" />
+# Dispatch PDF <img width="45" height="45" alt="app1" src="https://github.com/user-attachments/assets/294cc32a-2820-4468-bd5a-a3afb4fdc5c7" />
 
 Application Windows pour analyser des PDF bagages, détecter des pages « escale », prévisualiser, mapper les destinataires et préparer l’envoi d’emails.
 
