@@ -1,4 +1,4 @@
-# <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/294cc32a-2820-4468-bd5a-a3afb4fdc5c7" /> Dispatch PDF 
+# <img width="45" height="45" alt="app" src="https://github.com/user-attachments/assets/14ec4540-132b-4994-bb8f-97fcbcf126ee" /> Dispatch PDF 
 
 Application Windows pour analyser des PDF bagages, détecter des pages « escale », prévisualiser, mapper les destinataires et préparer l’envoi d’emails.
 
@@ -31,6 +31,7 @@ Distpatch PDF facilite le contrôle et la diffusion d’extraits PDF par escale.
 ### Téléchargez et lancez le fichier executable :
 
 
+[Cliquez pour télécharger](https://github.com/ThomasPontier/Distpatch-PDF/releases/download/latest/Dispatch-SATISFACTION.exe) 
 
 
 ### Ou depuis le code source :
